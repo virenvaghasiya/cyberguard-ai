@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CyberGuard Mail Scanner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #f8f9fb;
+            --bg-card: #ffffff;
+            --bg-dark: #0f172a;
+            --text: #1e293b;
+            --text-dim: #64748b;
+            --text-light: #94a3b8;
+            --border: #e2e8f0;
+            --safe: #10b981;
+            --safe-bg: #ecfdf5;
+            --safe-border: #a7f3d0;
+            --warn: #f59e0b;
+            --warn-bg: #fffbeb;
+            --warn-border: #fde68a;
+            --danger: #ef4444;
+            --danger-bg: #fef2f2;
+            --danger-border: #fecaca;
+            --info: #3b82f6;
+            --info-bg: #eff6ff;
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-dark);
+            color: white;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .shield-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .app-name {
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        .app-name span { color: #10b981; }
+
+        .header-status {
+            font-size: 11px;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #ef4444;
+        }
+
+        .status-dot.ok { background: #10b981; }
+
+        /* Connection screen */
+        .connect-screen {
+            padding: 40px 20px;
+            text-align: center;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .connect-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--safe), #059669);
+            border-radius: 20px;
+            margin: 0 auto 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+        }
+
+        .connect-title {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .connect-desc {
+            font-size: 14px;
+            color: var(--text-dim);
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+
+        .btn-google {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: white;
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 12px 24px;
+            border-radius: var(--radius);
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            width: 100%;
+            justify-content: center;
+        }
+
+        .btn-google:active { transform: scale(0.98); }
+
+        .btn-google img {
+            width: 20px;
+            height: 20px;
+        }
+
+        .btn-demo {
+            display: block;
+            width: 100%;
+            margin-top: 12px;
+            padding: 12px;
+            background: var(--info-bg);
+            color: var(--info);
+            border: 1px solid #bfdbfe;
+            border-radius: var(--radius);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-demo:active { transform: scale(0.98); }
+
+        .privacy-note {
+            margin-top: 20px;
+            font-size: 12px;
+            color: var(--text-light);
+            line-height: 1.5;
+        }
+
+        /* Stats bar */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            padding: 16px 20px;
+            background: white;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .stat-mini {
+            text-align: center;
+        }
+
+        .stat-mini-num {
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .stat-mini-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-safe .stat-mini-num { color: var(--safe); }
+        .stat-warn .stat-mini-num { color: var(--warn); }
+        .stat-danger .stat-mini-num { color: var(--danger); }
+
+        /* Scan button */
+        .scan-bar {
+            padding: 12px 20px;
+            background: white;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .btn-scan {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-scan:active { transform: scale(0.98); }
+        .btn-scan:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .btn-scan.scanning {
+            background: var(--text-dim);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Email list */
+        .email-list {
+            padding: 8px 12px;
+        }
+
+        .email-card {
+            background: white;
+            border-radius: var(--radius);
+            margin-bottom: 8px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            transition: box-shadow 0.15s;
+        }
+
+        .email-card.verdict-danger {
+            border-color: var(--danger-border);
+            background: var(--danger-bg);
+        }
+
+        .email-card.verdict-warning, .email-card.verdict-caution {
+            border-color: var(--warn-border);
+            background: var(--warn-bg);
+        }
+
+        .email-card-main {
+            padding: 14px 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            cursor: pointer;
+        }
+
+        .verdict-badge {
+            flex-shrink: 0;
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .verdict-badge.safe { background: var(--safe-bg); }
+        .verdict-badge.danger { background: var(--danger-bg); }
+        .verdict-badge.warning, .verdict-badge.caution { background: var(--warn-bg); }
+        .verdict-badge.monitor { background: var(--info-bg); }
+
+        .email-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .email-subject {
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 3px;
+        }
+
+        .email-sender {
+            font-size: 13px;
+            color: var(--text-dim);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .email-score {
+            flex-shrink: 0;
+            text-align: right;
+        }
+
+        .score-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
+        .score-label.safe { background: var(--safe-bg); color: var(--safe); }
+        .score-label.danger { background: var(--danger-bg); color: var(--danger); }
+        .score-label.warning, .score-label.caution { background: var(--warn-bg); color: var(--warn); }
+        .score-label.monitor { background: var(--info-bg); color: var(--info); }
+
+        /* Expanded details */
+        .email-details {
+            display: none;
+            padding: 0 16px 14px;
+            border-top: 1px solid var(--border);
+            margin-top: 0;
+        }
+
+        .email-card.expanded .email-details { display: block; }
+
+        .detail-section {
+            padding-top: 12px;
+        }
+
+        .detail-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+        }
+
+        .indicator-item {
+            font-size: 13px;
+            color: var(--text);
+            padding: 4px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+        }
+
+        .indicator-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-top: 6px;
+            flex-shrink: 0;
+        }
+
+        .indicator-dot.warn { background: var(--warn); }
+        .indicator-dot.danger { background: var(--danger); }
+        .indicator-dot.safe { background: var(--safe); }
+
+        .score-bar {
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .score-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .feature-item {
+            font-size: 12px;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .feature-check { color: var(--safe); }
+        .feature-x { color: var(--danger); }
+
+        /* Loading */
+        .loading-overlay {
+            padding: 60px 20px;
+            text-align: center;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--safe);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-text {
+            font-size: 14px;
+            color: var(--text-dim);
+        }
+
+        /* Empty state */
+        .empty-state {
+            padding: 60px 20px;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 14px;
+        }
+
+        /* Footer */
+        .footer {
+            padding: 20px;
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-light);
+        }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <div class="header-left">
+            <div class="shield-icon">&#x1f6e1;</div>
+            <span class="app-name">CyberGuard <span>Mail</span></span>
+        </div>
+        <div class="header-status" id="headerStatus">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Disconnected</span>
+        </div>
+    </header>
+
+    <div id="app"></div>
+
+    <div class="footer">
+        CyberGuard AI &mdash; Your emails are scanned locally. We never store your data.
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE = "http://localhost:8000";
+
+        let state = {
+            screen: "connect",  // connect, scanning, results
+            connected: false,
+            scanning: false,
+            results: null,
+        };
+
+        // Check API connection
+        async function checkConnection() {
+            try {
+                const res = await fetch(`${API_BASE}/health`);
+                if (res.ok) {
+                    state.connected = true;
+                    document.getElementById("statusDot").classList.add("ok");
+                    document.getElementById("statusText").textContent = "Protected";
+                }
+            } catch {
+                state.connected = false;
+                document.getElementById("statusDot").classList.remove("ok");
+                document.getElementById("statusText").textContent = "API offline";
+            }
+        }
+
+        // Run demo scan
+        async function runDemoScan() {
+            state.screen = "scanning";
+            state.scanning = true;
+            render();
+
+            try {
+                const res = await fetch(`${API_BASE}/scan/demo-emails`, { method: "POST" });
+                state.results = await res.json();
+                state.screen = "results";
+            } catch (e) {
+                alert("Could not connect to CyberGuard API. Make sure the server is running.");
+                state.screen = "connect";
+            }
+
+            state.scanning = false;
+            render();
+        }
+
+        // Scan custom emails (for future Gmail OAuth integration)
+        async function scanEmails(emails) {
+            state.screen = "scanning";
+            state.scanning = true;
+            render();
+
+            try {
+                const res = await fetch(`${API_BASE}/scan/emails`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ emails }),
+                });
+                state.results = await res.json();
+                state.screen = "results";
+            } catch (e) {
+                alert("Scan failed. Check the API connection.");
+                state.screen = "connect";
+            }
+
+            state.scanning = false;
+            render();
+        }
+
+        // Toggle email details
+        function toggleEmail(index) {
+            const card = document.getElementById(`email-${index}`);
+            if (card) card.classList.toggle("expanded");
+        }
+
+        // Back to connect screen
+        function goBack() {
+            state.screen = "connect";
+            state.results = null;
+            render();
+        }
+
+        // Render
+        function render() {
+            const app = document.getElementById("app");
+
+            if (state.screen === "connect") {
+                app.innerHTML = renderConnectScreen();
+            } else if (state.screen === "scanning") {
+                app.innerHTML = renderScanning();
+            } else if (state.screen === "results") {
+                app.innerHTML = renderResults();
+            }
+        }
+
+        function renderConnectScreen() {
+            return `
+                <div class="connect-screen">
+                    <div class="connect-icon">&#x1f6e1;</div>
+                    <div class="connect-title">Scan your inbox</div>
+                    <div class="connect-desc">
+                        CyberGuard Mail scans your emails for phishing, scams, and dangerous links
+                        before you open them. Your emails are analyzed locally and never stored.
+                    </div>
+                    <button class="btn-google" onclick="alert('Gmail OAuth coming soon! Use Demo mode for now.')">
+                        <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                        Sign in with Google
+                    </button>
+                    <button class="btn-demo" onclick="runDemoScan()">
+                        Try Demo Scan (sample emails)
+                    </button>
+                    <div class="privacy-note">
+                        Read-only access. We only read email headers and text for scanning.
+                        No emails are stored, forwarded, or shared. All analysis happens on your device.
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderScanning() {
+            return `
+                <div class="loading-overlay">
+                    <div class="spinner"></div>
+                    <div class="loading-text">Scanning your emails for threats...</div>
+                </div>
+            `;
+        }
+
+        function renderResults() {
+            const r = state.results;
+            if (!r) return '<div class="empty-state">No results yet.</div>';
+
+            const emailCards = r.results.map((email, i) => renderEmailCard(email, i)).join("");
+
+            return `
+                <div class="stats-bar">
+                    <div class="stat-mini stat-safe">
+                        <div class="stat-mini-num">${r.safe_count}</div>
+                        <div class="stat-mini-label">Safe</div>
+                    </div>
+                    <div class="stat-mini stat-warn">
+                        <div class="stat-mini-num">${r.suspicious_count}</div>
+                        <div class="stat-mini-label">Suspicious</div>
+                    </div>
+                    <div class="stat-mini stat-danger">
+                        <div class="stat-mini-num">${r.dangerous_count}</div>
+                        <div class="stat-mini-label">Dangerous</div>
+                    </div>
+                </div>
+                <div class="scan-bar">
+                    <button class="btn-scan" onclick="goBack()">
+                        &#x21bb; Scan Again
+                    </button>
+                </div>
+                <div class="email-list">
+                    ${emailCards}
+                </div>
+            `;
+        }
+
+        function renderEmailCard(email, index) {
+            const v = email.verdict;
+            const icon = {
+                safe: "&#x2705;",
+                monitor: "&#x1f50d;",
+                caution: "&#x26a0;&#xfe0f;",
+                warning: "&#x26a0;&#xfe0f;",
+                danger: "&#x1f6a8;",
+            }[v] || "&#x2705;";
+
+            const scoreColor = {
+                safe: "var(--safe)",
+                monitor: "var(--info)",
+                caution: "var(--warn)",
+                warning: "var(--warn)",
+                danger: "var(--danger)",
+            }[v] || "var(--safe)";
+
+            const scoreWidth = Math.min(100, (email.phishing_score / 20) * 100);
+
+            const indicators = (email.indicators || []).map(ind => {
+                const dotClass = v === "danger" ? "danger" : v === "safe" ? "safe" : "warn";
+                return `<div class="indicator-item"><span class="indicator-dot ${dotClass}"></span>${ind}</div>`;
+            }).join("");
+
+            const features = email.features || {};
+
+            return `
+                <div class="email-card verdict-${v}" id="email-${index}">
+                    <div class="email-card-main" onclick="toggleEmail(${index})">
+                        <div class="verdict-badge ${v}">${icon}</div>
+                        <div class="email-info">
+                            <div class="email-subject">${escapeHtml(email.subject)}</div>
+                            <div class="email-sender">${escapeHtml(email.sender_name || email.sender_email)}</div>
+                        </div>
+                        <div class="email-score">
+                            <span class="score-label ${v}">${email.verdict_label}</span>
+                        </div>
+                    </div>
+                    <div class="email-details">
+                        <div class="detail-section">
+                            <div class="detail-title">Threat score</div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div class="score-bar" style="flex: 1;">
+                                    <div class="score-bar-fill" style="width: ${scoreWidth}%; background: ${scoreColor};"></div>
+                                </div>
+                                <span style="font-size: 13px; font-weight: 600; color: ${scoreColor};">${email.phishing_score}</span>
+                            </div>
+                        </div>
+                        ${indicators ? `
+                            <div class="detail-section">
+                                <div class="detail-title">Indicators found</div>
+                                ${indicators}
+                            </div>
+                        ` : ""}
+                        <div class="detail-section">
+                            <div class="detail-title">Checks</div>
+                            <div class="feature-grid">
+                                <div class="feature-item">${features.suspicious_urls ? '<span class="feature-x">&#x2717;</span>' : '<span class="feature-check">&#x2713;</span>'} URLs clean</div>
+                                <div class="feature-item">${features.sender_mismatch ? '<span class="feature-x">&#x2717;</span>' : '<span class="feature-check">&#x2713;</span>'} Sender verified</div>
+                                <div class="feature-item">${features.brand_impersonation ? '<span class="feature-x">&#x2717;</span>' : '<span class="feature-check">&#x2713;</span>'} No impersonation</div>
+                                <div class="feature-item">${features.dangerous_attachment ? '<span class="feature-x">&#x2717;</span>' : '<span class="feature-check">&#x2713;</span>'} Safe attachments</div>
+                                <div class="feature-item">${features.has_form ? '<span class="feature-x">&#x2717;</span>' : '<span class="feature-check">&#x2713;</span>'} No forms</div>
+                                <div class="feature-item">${features.urgency_score > 0.1 ? '<span class="feature-x">&#x2717;</span>' : '<span class="feature-check">&#x2713;</span>'} No urgency</div>
+                            </div>
+                        </div>
+                        <div class="detail-section" style="font-size: 12px; color: var(--text-dim);">
+                            From: ${escapeHtml(email.sender_email)}<br>
+                            Date: ${escapeHtml(email.date || "N/A")}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return "";
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+
+        // Init
+        checkConnection();
+        render();
+        setInterval(checkConnection, 15000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+# CyberGuard AI — Default Configuration
+# Copy to config/local.yaml and modify for your environment.
+
+app:
+  name: "CyberGuard AI"
+  version: "0.1.0"
+  log_level: "INFO"   # DEBUG, INFO, WARNING, ERROR
+  log_format: "json"  # json or console
+
+# Network Traffic Anomaly Detector
+network_detector:
+  enabled: true
+  interface: null        # Network interface to monitor (null = read from file)
+  input_file: null       # CSV/PCAP file to analyze
+  batch_size: 1000       # Number of flow records per analysis batch
+  analysis_interval: 30  # Seconds between analysis cycles
+
+  # Feature extraction
+  features:
+    - flow_duration
+    - packet_count
+    - byte_count
+    - packets_per_second
+    - bytes_per_second
+    - src_port_entropy
+    - dst_port_entropy
+    - protocol_distribution
+    - inter_arrival_time_mean
+    - inter_arrival_time_std
+
+  # Anomaly detection model
+  model:
+    type: "isolation_forest"  # isolation_forest, autoencoder, xgboost
+    contamination: 0.05       # Expected proportion of anomalies (5%)
+    n_estimators: 200
+    model_path: "data/models/network_anomaly_model.joblib"
+
+  # Alert thresholds
+  alerting:
+    score_threshold: -0.3        # Anomaly score threshold (lower = more anomalous)
+    min_confidence: 0.7          # Minimum confidence to fire alert
+    cooldown_seconds: 60         # Avoid duplicate alerts within window
+    severity_mapping:
+      high: -0.7
+      medium: -0.5
+      low: -0.3
+
+# Alert Manager
+alerts:
+  storage: "sqlite"
+  database_url: "sqlite:///data/alerts.db"
+  retention_days: 90
+
+# API Server
+api:
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins:
+    - "http://localhost:3000"
+  auth_enabled: false  # Enable for production
+
+# Future modules (placeholders)
+log_analyzer:
+  enabled: false
+
+vulnerability_scanner:
+  enabled: false
+
+phishing_detector:
+  enabled: false
