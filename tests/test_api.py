@@ -368,3 +368,106 @@ async def test_files_scan_malicious_script(client, tmp_path):
     data = response.json()
     assert data["count"] > 0
     assert data["findings"][0]["risk"] in ("high", "critical")
+
+
+# ── Phase 9 tests ─────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_response_rules_list(client):
+    """Rules list should return built-in default rules."""
+    response = await client.get("/response/rules")
+    assert response.status_code == 200
+    data = response.json()
+    assert "rules" in data
+    assert data["count"] >= 1
+    assert all("name" in r for r in data["rules"])
+
+
+@pytest.mark.asyncio
+async def test_response_rules_upsert_and_delete(client):
+    """Create a custom rule then delete it."""
+    custom_rule = {
+        "name": "test_custom_rule",
+        "description": "pytest temp rule",
+        "enabled": True,
+        "auto": True,
+        "condition": {"attack_types": ["test_attack"], "severity_gte": "high"},
+        "actions": [{"type": "log", "level": "info", "message": "test"}],
+    }
+    # Upsert
+    response = await client.post("/response/rules", json=custom_rule)
+    assert response.status_code == 200
+    assert response.json()["saved"] is True
+
+    # Should appear in list
+    response = await client.get("/response/rules")
+    names = [r["name"] for r in response.json()["rules"]]
+    assert "test_custom_rule" in names
+
+    # Delete
+    response = await client.delete("/response/rules/test_custom_rule")
+    assert response.status_code == 200
+    assert response.json()["deleted"] is True
+
+    # Should be gone
+    response = await client.get("/response/rules")
+    names = [r["name"] for r in response.json()["rules"]]
+    assert "test_custom_rule" not in names
+
+
+@pytest.mark.asyncio
+async def test_response_rules_enable_disable(client):
+    """Enable and disable a built-in rule."""
+    rule_name = "block_c2_critical"
+
+    response = await client.patch(f"/response/rules/{rule_name}/disable")
+    assert response.status_code == 200
+    assert response.json()["enabled"] is False
+
+    response = await client.patch(f"/response/rules/{rule_name}/enable")
+    assert response.status_code == 200
+    assert response.json()["enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_response_rules_disable_unknown(client):
+    """Disabling an unknown rule should return 404."""
+    response = await client.patch("/response/rules/nonexistent_rule/disable")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_response_rules_reset(client):
+    """Reset should restore default rule count."""
+    response = await client.post("/response/rules/reset")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["reset"] is True
+    assert data["total_rules"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_response_log(client):
+    """Execution log should return list structure."""
+    response = await client.get("/response/log?limit=10")
+    assert response.status_code == 200
+    data = response.json()
+    assert "log" in data
+    assert isinstance(data["log"], list)
+
+
+@pytest.mark.asyncio
+async def test_response_pending(client):
+    """Pending actions should return list structure."""
+    response = await client.get("/response/pending")
+    assert response.status_code == 200
+    data = response.json()
+    assert "pending" in data
+    assert isinstance(data["pending"], list)
+
+
+@pytest.mark.asyncio
+async def test_response_pending_dismiss_unknown(client):
+    """Dismissing a non-existent pending action should return 404."""
+    response = await client.post("/response/pending/99999999/dismiss")
+    assert response.status_code == 404

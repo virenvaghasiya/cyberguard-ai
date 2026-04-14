@@ -54,6 +54,17 @@ Endpoints:
         POST /files/fim/baseline    — take a fresh FIM baseline snapshot
         POST /files/fim/approve     — mark a FIM change as approved
         GET  /files/hashdb          — malware hash DB stats
+    Auto-Response Rules Engine (Phase 9)
+        GET  /response/rules        — list all rules
+        POST /response/rules        — create/update a rule
+        DELETE /response/rules/{name} — delete a rule by name
+        PATCH /response/rules/{name}/enable  — enable a rule
+        PATCH /response/rules/{name}/disable — disable a rule
+        POST /response/rules/reset  — restore built-in default rules
+        GET  /response/log          — recent rule execution log
+        GET  /response/pending      — manual-confirmation queue
+        POST /response/pending/{id}/confirm  — confirm a pending action
+        POST /response/pending/{id}/dismiss  — dismiss a pending action
     WebSocket
         WS   /ws/alerts             — live alert stream
 """
@@ -87,6 +98,7 @@ from src.detectors.persistence_monitor import PersistenceMonitor
 from src.detectors.usb_monitor import USBMonitor
 from src.detectors.signature_detector import SignatureDetector
 from src.detectors.file_scanner import FileScanner
+from src.response.rules_engine import RulesEngine
 from src.defense import block_store, firewall
 
 # ---------------------------------------------------------------------------
@@ -135,12 +147,18 @@ async def lifespan(app: FastAPI):
     # Initialise block store DB + re-apply any active blocks from previous run
     await block_store.init_db()
 
+    # Start auto-response rules engine
+    rules_engine = RulesEngine(event_bus=pipeline.event_bus, pipeline=pipeline)
+    rules_engine.start()
+    app.state.rules_engine = rules_engine
+
     # Background task: expire timed blocks every 60 s
     import asyncio as _asyncio
     expiry_task = _asyncio.create_task(block_store.run_expiry_loop())
 
     await pipeline.start_all()
     yield
+    rules_engine.stop()
     await pipeline.stop_all()
     expiry_task.cancel()
 
@@ -918,6 +936,103 @@ async def files_hashdb():
         "hash_count": detector.get_hash_db_size(),
         "db_path": "data/malware_hashes.txt",
     }
+
+
+# ---------------------------------------------------------------------------
+# Auto-Response Rules Engine endpoints (Phase 9)
+# ---------------------------------------------------------------------------
+
+def _get_rules_engine() -> "RulesEngine":
+    if not hasattr(app.state, "rules_engine") or app.state.rules_engine is None:
+        raise HTTPException(status_code=503, detail="Rules engine not available")
+    return app.state.rules_engine
+
+
+@app.get("/response/rules", tags=["Response Engine"])
+async def response_rules_list():
+    """List all auto-response rules."""
+    engine = _get_rules_engine()
+    return {"count": len(engine.get_rules()), "rules": engine.get_rules()}
+
+
+@app.post("/response/rules", tags=["Response Engine"])
+async def response_rules_upsert(rule: dict):
+    """Create or update a response rule (matched by name)."""
+    if "name" not in rule:
+        raise HTTPException(status_code=400, detail="Rule must have a 'name' field")
+    engine = _get_rules_engine()
+    updated = engine.upsert_rule(rule)
+    return {"saved": True, "updated": updated, "name": rule["name"]}
+
+
+@app.delete("/response/rules/{name}", tags=["Response Engine"])
+async def response_rules_delete(name: str):
+    """Delete a rule by name."""
+    engine = _get_rules_engine()
+    if not engine.delete_rule(name):
+        raise HTTPException(status_code=404, detail=f"Rule '{name}' not found")
+    return {"deleted": True, "name": name}
+
+
+@app.patch("/response/rules/{name}/enable", tags=["Response Engine"])
+async def response_rules_enable(name: str):
+    """Enable a rule."""
+    engine = _get_rules_engine()
+    if not engine.set_rule_enabled(name, True):
+        raise HTTPException(status_code=404, detail=f"Rule '{name}' not found")
+    return {"enabled": True, "name": name}
+
+
+@app.patch("/response/rules/{name}/disable", tags=["Response Engine"])
+async def response_rules_disable(name: str):
+    """Disable a rule without deleting it."""
+    engine = _get_rules_engine()
+    if not engine.set_rule_enabled(name, False):
+        raise HTTPException(status_code=404, detail=f"Rule '{name}' not found")
+    return {"enabled": False, "name": name}
+
+
+@app.post("/response/rules/reset", tags=["Response Engine"])
+async def response_rules_reset():
+    """Restore all built-in default rules (custom rules are preserved)."""
+    engine = _get_rules_engine()
+    total = engine.reset_rules_to_default()
+    return {"reset": True, "total_rules": total}
+
+
+@app.get("/response/log", tags=["Response Engine"])
+async def response_log(limit: int = 50):
+    """Return recent rule execution log entries."""
+    engine = _get_rules_engine()
+    entries = engine.get_execution_log(limit=limit)
+    return {"count": len(entries), "log": entries}
+
+
+@app.get("/response/pending", tags=["Response Engine"])
+async def response_pending():
+    """Return actions waiting for manual confirmation."""
+    engine = _get_rules_engine()
+    pending = engine.get_pending_actions()
+    return {"count": len(pending), "pending": pending}
+
+
+@app.post("/response/pending/{action_id}/confirm", tags=["Response Engine"])
+async def response_pending_confirm(action_id: str):
+    """Confirm and execute a pending action."""
+    engine = _get_rules_engine()
+    result = await engine.confirm_action(action_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@app.post("/response/pending/{action_id}/dismiss", tags=["Response Engine"])
+async def response_pending_dismiss(action_id: str):
+    """Dismiss a pending action without executing it."""
+    engine = _get_rules_engine()
+    if not engine.dismiss_action(action_id):
+        raise HTTPException(status_code=404, detail="Pending action not found")
+    return {"dismissed": True, "id": action_id}
 
 
 # ---------------------------------------------------------------------------
