@@ -154,3 +154,86 @@ async def test_defense_unblock_unknown_ip(client):
     """Unblocking an IP that is not blocked should return 404."""
     response = await client.post("/defense/unblock?ip=192.0.2.99")
     assert response.status_code == 404
+
+
+# ── Phase 7 tests ─────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_processes_suspicious(client):
+    """Suspicious processes endpoint should return structured findings."""
+    response = await client.get("/processes/suspicious")
+    assert response.status_code == 200
+    data = response.json()
+    assert "count" in data
+    assert "findings" in data
+    assert isinstance(data["findings"], list)
+
+
+@pytest.mark.asyncio
+async def test_processes_all(client):
+    """All-processes endpoint should return running processes."""
+    response = await client.get("/processes/all")
+    assert response.status_code == 200
+    data = response.json()
+    assert "count" in data
+    assert "processes" in data
+    assert data["count"] > 0  # there must be at least some processes running
+
+
+@pytest.mark.asyncio
+async def test_process_kill_invalid_pid(client):
+    """Killing a non-existent PID should return 400."""
+    response = await client.post("/processes/kill/9999999")
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_persistence_baseline(client):
+    """Taking a baseline should return file count."""
+    response = await client.post("/persistence/baseline")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["baseline_taken"] is True
+    assert data["files_watched"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_persistence_status(client):
+    """Persistence status should return change list after baseline exists."""
+    # Ensure baseline exists first
+    await client.post("/persistence/baseline")
+    response = await client.get("/persistence/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert "has_baseline" in data
+    assert "changes_detected" in data
+    assert "changes" in data
+
+
+@pytest.mark.asyncio
+async def test_usb_devices(client):
+    """USB devices endpoint should return device list."""
+    response = await client.get("/usb/devices")
+    assert response.status_code == 200
+    data = response.json()
+    assert "count" in data
+    assert "devices" in data
+    assert isinstance(data["devices"], list)
+
+
+@pytest.mark.asyncio
+async def test_usb_suspicious(client):
+    """USB suspicious endpoint should return structured findings."""
+    response = await client.get("/usb/suspicious")
+    assert response.status_code == 200
+    data = response.json()
+    assert "count" in data
+    assert "devices" in data
+
+
+@pytest.mark.asyncio
+async def test_usb_trust(client):
+    """Trusting a USB device ID should succeed."""
+    response = await client.post("/usb/trust?device_id=05ac:1234")
+    assert response.status_code == 200
+    assert response.json()["trusted"] is True

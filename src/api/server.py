@@ -33,6 +33,18 @@ Endpoints:
         POST /defense/block         — block an IP {ip, reason, duration_hours}
         POST /defense/unblock       — unblock an IP ?ip=<ip>
         GET  /defense/history       — full block/unblock audit log
+    Process Monitor (Phase 7a)
+        GET  /processes/suspicious  — flagged processes with risk reasons
+        GET  /processes/all         — all running processes sorted by CPU
+        POST /processes/kill/{pid}  — terminate a process by PID
+    Persistence Monitor (Phase 7b)
+        GET  /persistence/status    — baseline status + recent changes
+        POST /persistence/baseline  — take a fresh baseline snapshot
+        POST /persistence/approve   — approve a change (update baseline)
+    USB Monitor (Phase 7c)
+        GET  /usb/devices           — all connected USB devices
+        GET  /usb/suspicious        — untrusted / risky USB devices
+        POST /usb/trust             — mark a device as trusted
     WebSocket
         WS   /ws/alerts             — live alert stream
 """
@@ -61,6 +73,9 @@ from src.core.pipeline import PipelineManager
 from src.detectors.network_detector import NetworkAnomalyDetector
 from src.detectors.log_analyzer import LogAnalyzer
 from src.detectors.vuln_scanner import VulnerabilityScanner
+from src.detectors.process_monitor import ProcessMonitor
+from src.detectors.persistence_monitor import PersistenceMonitor
+from src.detectors.usb_monitor import USBMonitor
 from src.defense import block_store, firewall
 
 # ---------------------------------------------------------------------------
@@ -85,6 +100,15 @@ async def lifespan(app: FastAPI):
     )
     pipeline.register_detector(
         VulnerabilityScanner(config=pipeline.config, event_bus=pipeline.event_bus)
+    )
+    pipeline.register_detector(
+        ProcessMonitor(config=pipeline.config, event_bus=pipeline.event_bus)
+    )
+    pipeline.register_detector(
+        PersistenceMonitor(config=pipeline.config, event_bus=pipeline.event_bus)
+    )
+    pipeline.register_detector(
+        USBMonitor(config=pipeline.config, event_bus=pipeline.event_bus)
     )
 
     # Hook WebSocket broadcaster into every event type
@@ -619,6 +643,132 @@ async def scan_vulnerability(request: VulnScanRequest):
         "low":      sum(1 for r in clean if r["severity"] == "low"),
         "findings": clean,
     }
+
+
+# ---------------------------------------------------------------------------
+# Process Monitor endpoints (Phase 7a)
+# ---------------------------------------------------------------------------
+
+@app.get("/processes/suspicious", tags=["Process Monitor"])
+async def processes_suspicious():
+    """Scan all running processes and return flagged ones with risk reasons."""
+    detector = pipeline.get_detector("process_monitor") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="Process monitor not available")
+    findings = await detector.analyze()
+    return {
+        "count": len(findings),
+        "critical": sum(1 for f in findings if f["risk"] == "critical"),
+        "high": sum(1 for f in findings if f["risk"] == "high"),
+        "medium": sum(1 for f in findings if f["risk"] == "medium"),
+        "findings": findings,
+    }
+
+
+@app.get("/processes/all", tags=["Process Monitor"])
+async def processes_all():
+    """Return all running processes sorted by CPU usage."""
+    detector = pipeline.get_detector("process_monitor") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="Process monitor not available")
+    procs = await detector.get_all_processes()
+    return {"count": len(procs), "processes": procs}
+
+
+@app.post("/processes/kill/{pid}", tags=["Process Monitor"])
+async def process_kill(pid: int):
+    """
+    Terminate a process by PID.
+    Tries SIGTERM first, then SIGKILL if the process doesn't exit within 3 s.
+    Requires the process to be owned by the current user (or run server with sudo).
+    """
+    detector = pipeline.get_detector("process_monitor") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="Process monitor not available")
+    result = await detector.kill_process(pid)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Persistence Monitor endpoints (Phase 7b)
+# ---------------------------------------------------------------------------
+
+@app.get("/persistence/status", tags=["Persistence Monitor"])
+async def persistence_status():
+    """Check baseline status and run a scan for any changes since last baseline."""
+    detector = pipeline.get_detector("persistence_monitor") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="Persistence monitor not available")
+    from src.detectors.persistence_monitor import BASELINE_PATH, _load_baseline
+    has_baseline = BASELINE_PATH.exists()
+    changes = await detector.analyze() if has_baseline else []
+    baseline = _load_baseline()
+    return {
+        "has_baseline": has_baseline,
+        "files_watched": len(baseline),
+        "changes_detected": len(changes),
+        "changes": changes,
+    }
+
+
+@app.post("/persistence/baseline", tags=["Persistence Monitor"])
+async def persistence_baseline():
+    """Take a fresh baseline snapshot of all watched files."""
+    detector = pipeline.get_detector("persistence_monitor") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="Persistence monitor not available")
+    return detector.take_baseline()
+
+
+@app.post("/persistence/approve", tags=["Persistence Monitor"])
+async def persistence_approve(path: str):
+    """
+    Mark a detected change as intentional (updates baseline for this path only).
+    Use this after making a known-good change to stop repeated alerts.
+    """
+    detector = pipeline.get_detector("persistence_monitor") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="Persistence monitor not available")
+    ok = detector.approve_change(path)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"Path not found in watched locations: {path}")
+    return {"approved": True, "path": path}
+
+
+# ---------------------------------------------------------------------------
+# USB Monitor endpoints (Phase 7c)
+# ---------------------------------------------------------------------------
+
+@app.get("/usb/devices", tags=["USB Monitor"])
+async def usb_devices():
+    """Return all currently connected USB devices with trust status."""
+    detector = pipeline.get_detector("usb_monitor") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="USB monitor not available")
+    devices = await detector.get_all_devices()
+    return {"count": len(devices), "devices": devices}
+
+
+@app.get("/usb/suspicious", tags=["USB Monitor"])
+async def usb_suspicious():
+    """Return connected USB devices that are untrusted or high-risk."""
+    detector = pipeline.get_detector("usb_monitor") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="USB monitor not available")
+    findings = await detector.analyze()
+    return {"count": len(findings), "devices": findings}
+
+
+@app.post("/usb/trust", tags=["USB Monitor"])
+async def usb_trust(device_id: str):
+    """Mark a USB device as trusted so it won't be flagged again."""
+    detector = pipeline.get_detector("usb_monitor") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="USB monitor not available")
+    detector.trust_device(device_id)
+    return {"trusted": True, "device_id": device_id}
 
 
 # ---------------------------------------------------------------------------
