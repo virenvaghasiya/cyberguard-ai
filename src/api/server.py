@@ -132,18 +132,6 @@ class TokenResponse(BaseModel):
     expires_in_hours: int
 
 
-class EmailScanRequest(BaseModel):
-    emails: list[dict]
-
-
-class EmailScanResponse(BaseModel):
-    total_scanned: int
-    safe_count: int
-    suspicious_count: int
-    dangerous_count: int
-    results: list[dict]
-
-
 class LogScanRequest(BaseModel):
     content: str
     log_type: str = "auto"   # "auto", "auth", "web"
@@ -382,7 +370,7 @@ async def gmail_status():
 
 
 @app.get("/gmail/auth", tags=["Gmail"])
-async def gmail_auth(request_host: str = "localhost"):
+async def gmail_auth():
     """
     Start Gmail OAuth2 flow.
     Open this URL in a browser on your Mac — it will redirect to Google
@@ -643,7 +631,7 @@ def start_server():
 
     uvicorn.run(
         "src.api.server:app",
-        host=api_config.get("host", "127.0.0.1"),  # nosec B104 — host overridden by config
+        host=api_config.get("host", "127.0.0.1"),
         port=api_config.get("port", 8000),
         reload=True,
     )
