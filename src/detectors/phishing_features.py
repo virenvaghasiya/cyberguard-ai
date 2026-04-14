@@ -88,6 +88,34 @@ CORPORATE_IMPERSONATION = [
     "facebook", "instagram", "whatsapp", "linkedin",
 ]
 
+# Domains known to send legitimate notification emails.
+# Emails from these senders get a major score reduction to avoid false positives.
+TRUSTED_SENDER_DOMAINS = {
+    # Developer platforms
+    "github.com", "gitlab.com", "bitbucket.org", "atlassian.com",
+    "jira.com", "confluence.com", "trello.com",
+    # Google services
+    "google.com", "accounts.google.com", "mail.google.com",
+    "googlemail.com", "youtube.com", "workspace.google.com",
+    # Apple
+    "apple.com", "icloud.com", "appleid.apple.com",
+    # Microsoft
+    "microsoft.com", "outlook.com", "live.com", "hotmail.com",
+    "office.com", "sharepoint.com", "teams.microsoft.com",
+    # Amazon / AWS
+    "amazon.com", "aws.amazon.com", "ses.amazonaws.com",
+    "amazonses.com",
+    # Cloud & dev tools
+    "heroku.com", "vercel.com", "netlify.com", "cloudflare.com",
+    "digitalocean.com", "linode.com", "render.com",
+    "stripe.com", "paypal.com", "twilio.com", "sendgrid.net",
+    # Social / comms
+    "slack.com", "notion.so", "linear.app", "figma.com",
+    "zoom.us", "calendly.com",
+    # CI/CD
+    "circleci.com", "travis-ci.com", "jenkins.io",
+}
+
 
 @dataclass
 class EmailFeatures:
@@ -184,6 +212,10 @@ def extract_email_features(email: dict) -> EmailFeatures:
     attachments = email.get("attachments", [])
     full_text = f"{subject} {body}"
 
+    # Check if sender is a trusted domain — reduces false positives significantly
+    sender_domain = _get_domain(sender_email)
+    is_trusted_sender = _is_trusted_domain(sender_domain)
+
     # Extract URLs from body if not provided
     urls = email.get("urls", [])
     if not urls:
@@ -192,6 +224,10 @@ def extract_email_features(email: dict) -> EmailFeatures:
     # --- URL Analysis ---
     features.url_count = len(urls)
     for url in urls:
+        # Skip suspicious checks for URLs pointing to trusted domains
+        url_domain = _get_domain(url)
+        if is_trusted_sender and _is_trusted_domain(url_domain):
+            continue
         analysis = _analyze_url(url)
         if analysis["is_suspicious"]:
             features.suspicious_url_count += 1
@@ -206,18 +242,23 @@ def extract_email_features(email: dict) -> EmailFeatures:
             features.max_subdomain_depth, analysis["subdomain_depth"]
         )
 
-    # Check for mismatched URLs (display text says one domain, href goes elsewhere)
-    features.mismatched_url_count = _count_mismatched_urls(email.get("body", ""))
+    # Check for mismatched URLs — skip for trusted senders (they use tracking links)
+    if not is_trusted_sender:
+        features.mismatched_url_count = _count_mismatched_urls(email.get("body", ""))
 
-    # Link to text ratio
+    # Link to text ratio — trusted senders often send HTML-heavy transactional emails
     text_length = len(re.sub(r"<[^>]+>", "", body)) or 1
-    features.link_to_text_ratio = min(1.0, len(urls) * 50 / text_length)
+    if not is_trusted_sender:
+        features.link_to_text_ratio = min(1.0, len(urls) * 50 / text_length)
 
     # --- Language Analysis ---
-    features.urgency_score = _phrase_match_score(full_text, URGENCY_PHRASES)
-    features.threat_score = _phrase_match_score(full_text, THREAT_PHRASES)
-    features.reward_score = _phrase_match_score(full_text, REWARD_PHRASES)
-    features.impersonation_score = _phrase_match_score(full_text, IMPERSONATION_PHRASES)
+    # For trusted senders, words like "failed", "security alert", "action required"
+    # are routine (CI failures, 2FA prompts, etc.) — halve their impact
+    lang_multiplier = 0.3 if is_trusted_sender else 1.0
+    features.urgency_score = _phrase_match_score(full_text, URGENCY_PHRASES) * lang_multiplier
+    features.threat_score  = _phrase_match_score(full_text, THREAT_PHRASES)  * lang_multiplier
+    features.reward_score  = _phrase_match_score(full_text, REWARD_PHRASES)  * lang_multiplier
+    features.impersonation_score = _phrase_match_score(full_text, IMPERSONATION_PHRASES) * lang_multiplier
 
     if features.urgency_score > 0:
         matches = _get_matching_phrases(full_text, URGENCY_PHRASES)
@@ -418,3 +459,21 @@ def _get_domain(email_or_url: str) -> str:
         return (parsed.hostname or "").lower()
     except Exception:
         return ""
+
+
+def _is_trusted_domain(domain: str) -> bool:
+    """
+    Return True if the domain is a known legitimate sender.
+    Matches exact domain or any subdomain (e.g. mail.github.com → github.com).
+    """
+    if not domain:
+        return False
+    if domain in TRUSTED_SENDER_DOMAINS:
+        return True
+    # Check if it's a subdomain of a trusted domain
+    parts = domain.split(".")
+    for i in range(1, len(parts)):
+        parent = ".".join(parts[i:])
+        if parent in TRUSTED_SENDER_DOMAINS:
+            return True
+    return False
