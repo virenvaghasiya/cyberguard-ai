@@ -45,6 +45,9 @@ Endpoints:
         GET  /usb/devices           — all connected USB devices
         GET  /usb/suspicious        — untrusted / risky USB devices
         POST /usb/trust             — mark a device as trusted
+    Signature Detector (Phase 5b)
+        POST /signatures/scan       — scan arbitrary text/payload for attack signatures
+        GET  /signatures/info       — signature library stats (count, categories)
     WebSocket
         WS   /ws/alerts             — live alert stream
 """
@@ -76,6 +79,7 @@ from src.detectors.vuln_scanner import VulnerabilityScanner
 from src.detectors.process_monitor import ProcessMonitor
 from src.detectors.persistence_monitor import PersistenceMonitor
 from src.detectors.usb_monitor import USBMonitor
+from src.detectors.signature_detector import SignatureDetector
 from src.defense import block_store, firewall
 
 # ---------------------------------------------------------------------------
@@ -109,6 +113,9 @@ async def lifespan(app: FastAPI):
     )
     pipeline.register_detector(
         USBMonitor(config=pipeline.config, event_bus=pipeline.event_bus)
+    )
+    pipeline.register_detector(
+        SignatureDetector(config=pipeline.config, event_bus=pipeline.event_bus)
     )
 
     # Hook WebSocket broadcaster into every event type
@@ -769,6 +776,59 @@ async def usb_trust(device_id: str):
         raise HTTPException(status_code=503, detail="USB monitor not available")
     detector.trust_device(device_id)
     return {"trusted": True, "device_id": device_id}
+
+
+# ---------------------------------------------------------------------------
+# Signature Detector endpoints (Phase 5b)
+# ---------------------------------------------------------------------------
+
+class SignatureScanRequest(BaseModel):
+    text: str = ""
+    payload: str = ""
+    url: str = ""
+
+
+@app.post("/signatures/scan", tags=["Signature Detector"])
+async def signatures_scan(req: SignatureScanRequest):
+    """
+    Scan arbitrary text, payload, or URL for known attack signatures.
+    Returns all matched signatures with severity and category.
+    """
+    detector = pipeline.get_detector("signature_detector") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="Signature detector not available")
+
+    data = {k: v for k, v in req.model_dump().items() if v}
+    if not data:
+        return {"matches": [], "match_count": 0, "highest_severity": None}
+
+    findings = await detector.analyze(data)
+    if not findings:
+        return {"matches": [], "match_count": 0, "highest_severity": None}
+
+    all_matches = [m for f in findings for m in f["matched_signatures"]]
+    sev_order = ["critical", "high", "medium", "low"]
+    severities = {m["severity"] for m in all_matches}
+    highest = next((s for s in sev_order if s in severities), None)
+
+    return {
+        "match_count": len(all_matches),
+        "highest_severity": highest,
+        "attack_types": list({t for f in findings for t in f["attack_types"]}),
+        "matches": all_matches,
+    }
+
+
+@app.get("/signatures/info", tags=["Signature Detector"])
+async def signatures_info():
+    """Return statistics about the built-in signature library."""
+    detector = pipeline.get_detector("signature_detector") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="Signature detector not available")
+    return {
+        "signature_count": detector.get_signature_count(),
+        "categories": detector.get_categories(),
+    }
 
 
 # ---------------------------------------------------------------------------

