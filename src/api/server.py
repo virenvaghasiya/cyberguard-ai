@@ -171,7 +171,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     token = create_access_token(form_data.username)
     return TokenResponse(
         access_token=token,
-        token_type="bearer",
+        token_type="bearer",  # nosec B106 — OAuth2 token type, not a password
         expires_in_hours=24,
     )
 
@@ -555,7 +555,7 @@ def start_server():
 
     uvicorn.run(
         "src.api.server:app",
-        host=api_config.get("host", "0.0.0.0"),
+        host=api_config.get("host", "127.0.0.1"),  # nosec B104 — host overridden by config
         port=api_config.get("port", 8000),
         reload=True,
     )

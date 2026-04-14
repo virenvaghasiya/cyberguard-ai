@@ -51,7 +51,7 @@ SCORING_WEIGHTS = {
     "freemail_corporate": 2.0,
     "dangerous_attachment": 4.0,
     "embedded_form": 3.0,
-    "password_field": 5.0,
+    "password_field": 5.0,  # nosec B105 — scoring weight key, not a password
     "high_link_ratio": 1.5,
 }
 
