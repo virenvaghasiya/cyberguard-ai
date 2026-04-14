@@ -33,6 +33,12 @@ data/models/*.pt
 data/*.db
 !data/sample/
 
+# Runtime-generated state files (machine-specific, regenerated on first run)
+data/persistence_baseline.json
+data/fim_baseline.json
+data/trusted_usb_devices.json
+config/response_rules.json
+
 # OS
 .DS_Store
 Thumbs.db
