@@ -1,5 +1,5 @@
 """
-CyberGuard AI — REST API Server (Phase 3).
+CyberGuard AI — REST API Server.
 
 Endpoints:
     Auth
@@ -12,14 +12,19 @@ Endpoints:
         GET  /stats/summary         — threat counts by type and severity
         GET  /stats/timeline        — hourly threat counts (last 24 h)
     Network Monitor
-        GET  /network/status        — network detector metrics
-        POST /analyze/demo          — run demo on synthetic traffic
+        GET  /network/status        — anomaly detector metrics
+        GET  /network/live          — live active connections (real psutil data)
+        GET  /network/system        — CPU / memory / disk / net I/O stats
         POST /analyze/upload        — analyze uploaded CSV
-    Email / Phishing
-        POST /scan/emails           — scan email list for phishing
-        POST /scan/demo-emails      — demo phishing scan
+    Gmail
+        GET  /gmail/status          — is Gmail connected?
+        GET  /gmail/auth            — start OAuth flow (open in browser on Mac)
+        GET  /gmail/callback        — OAuth callback (handled automatically)
+        POST /gmail/scan            — fetch real inbox + phishing scan
+        POST /gmail/disconnect      — revoke Gmail access
     Log Analyzer
-        POST /scan/log              — analyze raw log text
+        POST /scan/log              — analyze pasted log text
+        GET  /scan/system-logs      — fetch + analyze real macOS system logs
     Vulnerability Scanner
         POST /scan/vulnerability    — scan a host for open/risky ports
     WebSocket
@@ -43,12 +48,13 @@ from pydantic import BaseModel
 
 from src.api.auth import authenticate_user, create_access_token
 from src.api.websocket import broadcast_event, ws_manager
+from src.api import gmail_oauth
+from src.api.system_monitor import get_live_connections, get_system_stats, get_real_logs
 from src.core.events import EventType
 from src.core.pipeline import PipelineManager
 from src.detectors.network_detector import NetworkAnomalyDetector
 from src.detectors.log_analyzer import LogAnalyzer
 from src.detectors.vuln_scanner import VulnerabilityScanner
-from src.utils.sample_data import generate_sample_traffic
 
 # ---------------------------------------------------------------------------
 # Global pipeline instance
@@ -294,7 +300,7 @@ async def stats_timeline(hours: int = 24):
 
 @app.get("/network/status", tags=["Network"])
 async def network_status():
-    """Current network anomaly detector metrics."""
+    """Current network anomaly detector metrics + recent anomalies."""
     if not pipeline:
         raise HTTPException(status_code=503, detail="Pipeline not initialized")
 
@@ -304,7 +310,6 @@ async def network_status():
 
     status_dict = detector.get_status().to_dict()
 
-    # Include recent network events
     all_events = pipeline.event_bus.get_recent_events(10_000)
     network_events = [
         e for e in all_events
@@ -317,26 +322,19 @@ async def network_status():
     }
 
 
-@app.post("/analyze/demo", response_model=AnalysisResponse, tags=["Network"])
-async def analyze_demo():
-    """Run network anomaly detection on synthetic demo traffic."""
-    if not pipeline:
-        raise HTTPException(status_code=503, detail="Pipeline not initialized")
+@app.get("/network/live", tags=["Network"])
+async def network_live():
+    """
+    Real-time active network connections on this machine.
+    Annotated with risk levels for suspicious ports.
+    """
+    return get_live_connections()
 
-    detector = pipeline.get_detector("network_anomaly_detector")
-    if not detector:
-        raise HTTPException(status_code=404, detail="Network detector not found")
 
-    traffic = generate_sample_traffic(n_normal=2000, n_anomalous=100)
-    results = await detector.analyze(traffic)
-    anomalies = [r for r in results if r["is_anomaly"]]
-
-    return AnalysisResponse(
-        total_flows=len(results),
-        anomalies_detected=len(anomalies),
-        anomaly_rate=len(anomalies) / len(results) if results else 0,
-        results=anomalies[:50],
-    )
+@app.get("/network/system", tags=["Network"])
+async def network_system():
+    """Real-time CPU, memory, disk and network I/O stats."""
+    return get_system_stats()
 
 
 @app.post("/analyze/upload", response_model=AnalysisResponse, tags=["Network"])
@@ -370,48 +368,86 @@ async def analyze_upload(file: UploadFile = File(...)):
 
 
 # ---------------------------------------------------------------------------
-# Email / phishing scan endpoints
+# Gmail OAuth + real email scanning endpoints
 # ---------------------------------------------------------------------------
 
-@app.post("/scan/emails", response_model=EmailScanResponse, tags=["Email"])
-async def scan_emails(request: EmailScanRequest):
-    """Scan a list of emails for phishing indicators."""
+@app.get("/gmail/status", tags=["Gmail"])
+async def gmail_status():
+    """Check if Gmail is connected (OAuth token exists and is valid)."""
+    connected = gmail_oauth.is_connected()
+    return {
+        "connected": connected,
+        "setup_required": not Path("config/gmail_credentials.json").exists(),
+    }
+
+
+@app.get("/gmail/auth", tags=["Gmail"])
+async def gmail_auth(request_host: str = "localhost"):
+    """
+    Start Gmail OAuth2 flow.
+    Open this URL in a browser on your Mac — it will redirect to Google
+    and then back to /gmail/callback automatically.
+    """
+    from fastapi.responses import RedirectResponse
+    try:
+        redirect_uri = f"http://localhost:8000/gmail/callback"
+        auth_url = gmail_oauth.get_auth_url(redirect_uri)
+        return RedirectResponse(url=auth_url)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/gmail/callback", tags=["Gmail"])
+async def gmail_callback(code: str, state: str = ""):
+    """Handle Google OAuth2 callback — exchange code for token."""
+    from fastapi.responses import HTMLResponse
+    try:
+        redirect_uri = "http://localhost:8000/gmail/callback"
+        gmail_oauth.exchange_code(code, redirect_uri)
+        return HTMLResponse("""
+            <html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#0a0a0f;color:#00ff9d">
+            <h2>✓ Gmail Connected</h2>
+            <p style="color:#aaa">CyberGuard AI can now scan your inbox for phishing.</p>
+            <p style="color:#666;font-size:13px">You can close this tab and return to the app.</p>
+            </body></html>
+        """)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"OAuth failed: {e}")
+
+
+@app.post("/gmail/scan", tags=["Gmail"])
+async def gmail_scan(max_emails: int = 50):
+    """
+    Fetch real emails from your Gmail inbox and scan for phishing.
+    Gmail must be connected first via GET /gmail/auth.
+    """
     from src.core.events import EventBus
     from src.detectors.phishing_detector import PhishingEmailDetector
     from src.api.gmail_integration import format_scan_result
 
-    event_bus = EventBus()
-    detector = PhishingEmailDetector(config={}, event_bus=event_bus)
-    await detector.start()
-    results = await detector.analyze(request.emails)
-    await detector.stop()
+    if not gmail_oauth.is_connected():
+        raise HTTPException(
+            status_code=401,
+            detail="Gmail not connected. Open http://localhost:8000/gmail/auth in your browser."
+        )
 
-    formatted = [
-        format_scan_result(email_data, analysis)
-        for email_data, analysis in zip(request.emails, results)
-    ]
+    try:
+        emails = gmail_oauth.fetch_inbox(max_results=max_emails)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch emails: {e}")
 
-    return EmailScanResponse(
-        total_scanned=len(formatted),
-        safe_count=sum(1 for r in formatted if r["verdict"] == "safe"),
-        suspicious_count=sum(1 for r in formatted if r["verdict"] in ("caution", "monitor", "warning")),
-        dangerous_count=sum(1 for r in formatted if r["verdict"] == "danger"),
-        results=formatted,
-    )
-
-
-@app.post("/scan/demo-emails", tags=["Email"])
-async def scan_demo_emails():
-    """Run phishing scan on built-in sample emails (for demo/testing)."""
-    from src.core.events import EventBus
-    from src.detectors.phishing_detector import PhishingEmailDetector
-    from src.utils.sample_emails import generate_sample_emails
-    from src.api.gmail_integration import format_scan_result
+    if not emails:
+        return {
+            "total_scanned": 0,
+            "safe_count": 0,
+            "suspicious_count": 0,
+            "dangerous_count": 0,
+            "results": [],
+        }
 
     event_bus = EventBus()
     detector = PhishingEmailDetector(config={}, event_bus=event_bus)
     await detector.start()
-    emails = generate_sample_emails()
     results = await detector.analyze(emails)
     await detector.stop()
 
@@ -429,18 +465,22 @@ async def scan_demo_emails():
     }
 
 
+@app.post("/gmail/disconnect", tags=["Gmail"])
+async def gmail_disconnect():
+    """Revoke Gmail access and delete stored token."""
+    gmail_oauth.disconnect()
+    return {"disconnected": True}
+
+
 # ---------------------------------------------------------------------------
-# Log analyzer endpoint
+# Log analyzer endpoints
 # ---------------------------------------------------------------------------
 
 @app.post("/scan/log", tags=["Log Analyzer"])
 async def scan_log(request: LogScanRequest):
     """
-    Analyze raw log text for security threats.
-
-    Supports auth logs (syslog, auth.log) and web server logs
-    (Apache / Nginx combined format). Set log_type to 'auto' to
-    let the detector guess the format.
+    Analyze pasted log text for security threats.
+    Supports auth logs (syslog, auth.log) and web server logs (Apache/Nginx).
     """
     if not pipeline:
         raise HTTPException(status_code=503, detail="Pipeline not initialized")
@@ -457,7 +497,6 @@ async def scan_log(request: LogScanRequest):
         "log_type": request.log_type,
     })
 
-    # Strip non-serializable severity_enum before returning
     clean = []
     for r in results:
         r_copy = dict(r)
@@ -470,6 +509,55 @@ async def scan_log(request: LogScanRequest):
         "high":     sum(1 for r in clean if r["severity"] == "high"),
         "medium":   sum(1 for r in clean if r["severity"] == "medium"),
         "low":      sum(1 for r in clean if r["severity"] == "low"),
+        "findings": clean,
+    }
+
+
+@app.get("/scan/system-logs", tags=["Log Analyzer"])
+async def scan_system_logs(hours: int = 1, log_type: str = "all"):
+    """
+    Fetch real macOS system logs and run them through the log analyzer.
+
+    Args:
+        hours:    Hours back to look (1–24, default 1)
+        log_type: auth | network | security | all
+    """
+    if not pipeline:
+        raise HTTPException(status_code=503, detail="Pipeline not initialized")
+
+    detector = pipeline.get_detector("log_analyzer")
+    if not detector:
+        raise HTTPException(status_code=404, detail="Log analyzer not found")
+
+    hours = max(1, min(hours, 24))
+    log_content = await get_real_logs(hours=hours, log_type=log_type)
+
+    if log_content.startswith("#"):
+        return {
+            "total_findings": 0, "critical": 0, "high": 0, "medium": 0, "low": 0,
+            "findings": [], "raw_lines": 0, "message": log_content,
+        }
+
+    results = await detector.analyze({
+        "content": log_content,
+        "log_type": "auto",
+    })
+
+    clean = []
+    for r in results:
+        r_copy = dict(r)
+        r_copy.pop("severity_enum", None)
+        clean.append(r_copy)
+
+    return {
+        "total_findings": len(clean),
+        "critical": sum(1 for r in clean if r["severity"] == "critical"),
+        "high":     sum(1 for r in clean if r["severity"] == "high"),
+        "medium":   sum(1 for r in clean if r["severity"] == "medium"),
+        "low":      sum(1 for r in clean if r["severity"] == "low"),
+        "raw_lines": len(log_content.splitlines()),
+        "hours_scanned": hours,
+        "log_type": log_type,
         "findings": clean,
     }
 
