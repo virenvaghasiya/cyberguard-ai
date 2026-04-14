@@ -80,3 +80,77 @@ async def test_get_events(client):
     assert response.status_code == 200
     data = response.json()
     assert "events" in data
+
+
+@pytest.mark.asyncio
+async def test_defense_status(client):
+    """Defense status endpoint should return pf state and block count."""
+    response = await client.get("/defense/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert "pf_active" in data
+    assert "active_block_count" in data
+    assert isinstance(data["active_block_count"], int)
+
+
+@pytest.mark.asyncio
+async def test_defense_blocklist(client):
+    """Blocklist endpoint should return list structure."""
+    response = await client.get("/defense/blocklist")
+    assert response.status_code == 200
+    data = response.json()
+    assert "count" in data
+    assert "blocks" in data
+    assert isinstance(data["blocks"], list)
+
+
+@pytest.mark.asyncio
+async def test_defense_block_and_unblock(client):
+    """Block an IP then unblock it — full round trip."""
+    test_ip = "10.255.255.1"
+
+    # Block
+    response = await client.post("/defense/block", json={
+        "ip": test_ip,
+        "reason": "pytest test block",
+        "attack_type": "test",
+        "severity": "high",
+        "duration_hours": 1,
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ip"] == test_ip
+    assert data["active"] is True
+
+    # Should appear in blocklist
+    response = await client.get("/defense/blocklist")
+    assert response.status_code == 200
+    ips = [b["ip"] for b in response.json()["blocks"]]
+    assert test_ip in ips
+
+    # Unblock
+    response = await client.post(f"/defense/unblock?ip={test_ip}")
+    assert response.status_code == 200
+    assert response.json()["unblocked"] is True
+
+    # Should no longer be in blocklist
+    response = await client.get("/defense/blocklist")
+    ips = [b["ip"] for b in response.json()["blocks"]]
+    assert test_ip not in ips
+
+
+@pytest.mark.asyncio
+async def test_defense_history(client):
+    """History endpoint should return audit log."""
+    response = await client.get("/defense/history?limit=10")
+    assert response.status_code == 200
+    data = response.json()
+    assert "history" in data
+    assert isinstance(data["history"], list)
+
+
+@pytest.mark.asyncio
+async def test_defense_unblock_unknown_ip(client):
+    """Unblocking an IP that is not blocked should return 404."""
+    response = await client.post("/defense/unblock?ip=192.0.2.99")
+    assert response.status_code == 404

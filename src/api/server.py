@@ -27,6 +27,12 @@ Endpoints:
         GET  /scan/system-logs      — fetch + analyze real macOS system logs
     Vulnerability Scanner
         POST /scan/vulnerability    — scan a host for open/risky ports
+    Defense (Phase 6 — Auto IP Blocking)
+        GET  /defense/status        — pf firewall status + active block count
+        GET  /defense/blocklist     — all currently blocked IPs with countdowns
+        POST /defense/block         — block an IP {ip, reason, duration_hours}
+        POST /defense/unblock       — unblock an IP ?ip=<ip>
+        GET  /defense/history       — full block/unblock audit log
     WebSocket
         WS   /ws/alerts             — live alert stream
 """
@@ -55,6 +61,7 @@ from src.core.pipeline import PipelineManager
 from src.detectors.network_detector import NetworkAnomalyDetector
 from src.detectors.log_analyzer import LogAnalyzer
 from src.detectors.vuln_scanner import VulnerabilityScanner
+from src.defense import block_store, firewall
 
 # ---------------------------------------------------------------------------
 # Global pipeline instance
@@ -84,9 +91,17 @@ async def lifespan(app: FastAPI):
     for event_type in EventType:
         pipeline.event_bus.subscribe(event_type, broadcast_event)
 
+    # Initialise block store DB + re-apply any active blocks from previous run
+    await block_store.init_db()
+
+    # Background task: expire timed blocks every 60 s
+    import asyncio as _asyncio
+    expiry_task = _asyncio.create_task(block_store.run_expiry_loop())
+
     await pipeline.start_all()
     yield
     await pipeline.stop_all()
+    expiry_task.cancel()
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +156,14 @@ class VulnScanRequest(BaseModel):
     target: str              # IP, hostname, or CIDR (max /24)
     ports: list[int] | None = None
     timeout: float = 1.0
+
+
+class BlockRequest(BaseModel):
+    ip: str
+    reason: str
+    attack_type: str = "manual"
+    severity: str = "high"
+    duration_hours: float = 1.0  # 0 = permanent
 
 
 # ---------------------------------------------------------------------------
@@ -596,6 +619,74 @@ async def scan_vulnerability(request: VulnScanRequest):
         "low":      sum(1 for r in clean if r["severity"] == "low"),
         "findings": clean,
     }
+
+
+# ---------------------------------------------------------------------------
+# Defense endpoints (Phase 6 — Auto IP Blocking)
+# ---------------------------------------------------------------------------
+
+@app.get("/defense/status", tags=["Defense"])
+async def defense_status():
+    """
+    Return whether the pf firewall anchor is active and how many IPs
+    are currently blocked.
+    """
+    pf_active = await firewall.is_pf_available()
+    active_blocks = await block_store.list_active()
+    return {
+        "pf_active": pf_active,
+        "active_block_count": len(active_blocks),
+        "setup_required": not pf_active,
+        "setup_command": "sudo python -m src.defense.setup_pf" if not pf_active else None,
+    }
+
+
+@app.get("/defense/blocklist", tags=["Defense"])
+async def defense_blocklist():
+    """List all currently active blocked IPs with countdown timers."""
+    active = await block_store.list_active()
+    return {
+        "count": len(active),
+        "blocks": active,
+    }
+
+
+@app.post("/defense/block", tags=["Defense"])
+async def defense_block(request: BlockRequest):
+    """
+    Block an IP address.
+
+    duration_hours=0 means permanent. Requires pf to be set up with:
+        sudo python -m src.defense.setup_pf
+
+    Even without pf (no sudo), the block is recorded in the database.
+    """
+    duration_seconds = int(request.duration_hours * 3600)
+    result = await block_store.add_block(
+        ip=request.ip,
+        reason=request.reason,
+        attack_type=request.attack_type,
+        severity=request.severity,
+        duration_seconds=duration_seconds,
+        auto_block=True,
+    )
+    return result
+
+
+@app.post("/defense/unblock", tags=["Defense"])
+async def defense_unblock(ip: str):
+    """Remove a block on an IP address."""
+    if not await block_store.is_blocked(ip):
+        raise HTTPException(status_code=404, detail=f"{ip} is not currently blocked")
+    await block_store.remove_block(ip)
+    return {"unblocked": True, "ip": ip}
+
+
+@app.get("/defense/history", tags=["Defense"])
+async def defense_history(limit: int = 100):
+    """Full block/unblock audit log (most recent first)."""
+    history = await block_store.list_history(limit=limit)
+    return {"count": len(history), "history": history}
 
 
 # ---------------------------------------------------------------------------
