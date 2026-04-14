@@ -1,20 +1,78 @@
 # CyberGuard AI — Master Build Plan
 
-> **Goal:** Build a personal AI-powered cybersecurity system that not only *detects* attacks on your Mac but automatically *responds* and *blocks* them — a real Intrusion Prevention System (IPS), not just a detector.
+> **Goal:** Build a personal AI-powered cybersecurity system that detects and automatically responds to the widest possible range of attacks on your Mac — a real Intrusion Prevention System (IPS), not just a detector.
+
+---
+
+## Attack Coverage Map
+
+| Attack Category | Example | Detect | Block/Stop | Phase |
+|---|---|---|---|---|
+| Network flood / DDoS | Packet flood overwhelming Mac | ✅ | 🔜 P6 | 2a + 5 |
+| Port scanning | Attacker mapping open ports | ✅ | 🔜 P6 | 2a |
+| Data exfiltration | Large upload to unknown IP | ✅ | 🔜 P6 | 2a + 5 |
+| C2 beacon (malware calling home) | Regular small packets to attacker | ✅ | 🔜 P6 | 2a + 5 |
+| Brute force login | Repeated SSH / web login attempts | ✅ | 🔜 P6 | 2b |
+| Privilege escalation | sudo abuse after failed logins | ✅ | 🔜 P9 | 2b |
+| Web scanning / directory traversal | 404 flood on a local web server | ✅ | 🔜 P6 | 2b |
+| Phishing emails | Fake PayPal / bank login page | ✅ | ✅ alert | 2d |
+| Open vulnerable ports | MySQL / MongoDB exposed to network | ✅ | Manual | 2c |
+| Known attack signatures (50k+) | Shellshock, EternalBlue, Log4Shell | 🔜 | 🔜 P6 | P5b |
+| DNS tunneling | Data smuggled inside DNS queries | 🔜 | 🔜 P6 | P5c |
+| Malware domain C2 | Malware connecting to known bad domain | 🔜 | 🔜 P5c | P5c |
+| DGA domains (botnet) | Random-looking domain names | 🔜 | 🔜 P5c | P5c |
+| TLS/HTTPS C2 (JA3) | Malware hiding in HTTPS traffic | 🔜 | 🔜 P6 | P5d |
+| Man-in-the-middle / ARP spoofing | Attacker intercepting your traffic | 🔜 | 🔜 P6 | P5e |
+| SYN flood | TCP connection flood | 🔜 | 🔜 P6 | P5 |
+| Crypto miner | xmrig using 100% CPU | 🔜 | 🔜 P7 | P7a |
+| Reverse shell | nc / netcat phoning home | 🔜 | 🔜 P7 | P7a |
+| Persistence (LaunchAgent) | Malware adding macOS startup item | 🔜 | 🔜 P7 | P7b |
+| /etc/hosts tampering | Redirect google.com to attacker | 🔜 | 🔜 P7 | P7b |
+| SSH key backdoor | New key added to authorized_keys | 🔜 | 🔜 P7 | P7b |
+| New user account created | Attacker adds hidden admin user | 🔜 | 🔜 P7 | P7b |
+| Malware download | Known malware hash in Downloads | 🔜 | 🔜 P8 | P8a |
+| Script obfuscation | base64-encoded malware payload | 🔜 | 🔜 P8 | P8b |
+| System file tampering | /etc/sudoers or shell config changed | 🔜 | 🔜 P8 | P8c |
+| Malicious USB device | BadUSB / rogue HID device | 🔜 | alert | P7c |
+| Rogue Wi-Fi access point | Evil twin attack | 🔜 | alert | P11 |
+| ARP poisoning on LAN | Man-in-the-middle on same network | 🔜 | 🔜 P11 | P11 |
+| Malicious browser extension | Extension stealing passwords | 🔜 | alert | P12 |
+| Known bad IP connection | IP on AbuseIPDB / Spamhaus | 🔜 | 🔜 P10 | P10 |
 
 ---
 
 ## What We Have Built vs. What We Are Building
 
-| Capability | IDS (what we built) | IPS (what we are building) |
+| Capability | Built | Coming |
 |---|---|---|
-| See suspicious traffic | ✅ Yes | ✅ Yes |
-| Alert you to threats | ✅ Yes | ✅ Yes |
-| Automatically block attacker | ❌ No | ✅ Phase 6 |
-| Capture actual packets | ❌ No | ✅ Phase 5 |
-| Kill malicious processes | ❌ No | ✅ Phase 7 |
-| Scan files for malware | ❌ No | ✅ Phase 8 |
-| Auto-apply response rules | ❌ No | ✅ Phase 9 |
+| Network anomaly ML detection | ✅ | — |
+| Log analysis (brute force, escalation) | ✅ | — |
+| Vulnerability port scanner | ✅ | — |
+| Phishing email detector | ✅ | — |
+| Live network connections | ✅ | — |
+| Real system stats | ✅ | — |
+| Real system logs | ✅ | — |
+| Gmail inbox scanner | ✅ | — |
+| REST API + WebSocket | ✅ | — |
+| iPhone app | ✅ | — |
+| Live packet capture (scapy) | — | Phase 5a |
+| Known attack signatures (Snort rules) | — | Phase 5b |
+| DNS monitoring + sinkholing | — | Phase 5c |
+| TLS/JA3 fingerprint analysis | — | Phase 5d |
+| ARP spoofing / MITM detection | — | Phase 5e |
+| Auto IP blocking (pfctl firewall) | — | Phase 6 |
+| VirusTotal IP + domain lookup | — | Phase 6b |
+| Crypto miner / reverse shell detection | — | Phase 7a |
+| Persistence monitoring (LaunchAgents etc.) | — | Phase 7b |
+| USB device monitoring | — | Phase 7c |
+| Malware hash file scanner | — | Phase 8a |
+| Script obfuscation detection | — | Phase 8b |
+| File integrity monitoring (FIM) | — | Phase 8c |
+| Auto-response rules engine | — | Phase 9 |
+| iOS push notifications | — | Phase 9 |
+| Threat intelligence feeds | — | Phase 10 |
+| Wi-Fi / rogue AP detection | — | Phase 11 |
+| Browser extension security | — | Phase 12 |
 
 ---
 
@@ -39,304 +97,366 @@
 
 **Goal:** Four real detectors that catch specific attack categories.
 
-### Detectors built
-
 #### 2a. Network Anomaly Detector
 - File: `src/detectors/network_anomaly.py`
 - Model: Isolation Forest (sklearn) trained on network flow features
-- Detects: DDoS floods, data exfiltration (high bytes out), port scans (many destinations), C2 beacon patterns (regular low-byte intervals)
-- Input: CSV network flow data or live feature extraction
+- Detects: DDoS floods, data exfiltration, port scans, C2 beacon patterns
 - Output: anomaly score 0-1, attack category, confidence
 
 #### 2b. Log Analyzer
 - File: `src/detectors/log_analyzer.py`
-- Method: Rule-based pattern matching + frequency analysis
-- Detects: Brute force login (N failures in window), privilege escalation (sudo after repeated failure), web scanning (too many 404s), SSH key tampering
-- Input: Raw syslog / auth.log / web access log text
-- Output: Matched rules, timeline of suspicious events
+- Detects: Brute force login, privilege escalation, web scanning, SSH key tampering
+- Input: Raw syslog / auth.log text
 
 #### 2c. Vulnerability Scanner
 - File: `src/detectors/vuln_scanner.py`
-- Method: Async TCP port probing with banner grabbing
-- Covers: 40+ risky ports (22=SSH, 23=Telnet, 3389=RDP, 3306=MySQL, 27017=MongoDB, etc.)
-- Input: Target IP / hostname
-- Output: Open ports, service banners, CVE references for known-bad configurations
+- Covers: 40+ risky ports with banner grabbing and CVE references
 
 #### 2d. Phishing Email Detector
 - File: `src/detectors/phishing_detector.py` + `src/detectors/phishing_features.py`
-- Method: Heuristic scoring across 15+ signals
-- Signals: Mismatched URLs, lookalike domains, urgency language, spoofed sender, suspicious attachments, link-to-text ratio, free hosting domains
-- Trusted sender whitelist: 40+ domains (GitHub, Amazon, Google, Apple, Stripe, etc.) with brand-label matching so `amazon.co.uk` is treated same as `amazon.com`
-- Input: Email object (subject, body, sender, URLs, attachments)
-- Output: Phishing score 0-100, triggered indicators, verdict
+- 15+ signals, trusted sender whitelist with brand-label matching
+- Amazon OTP, GitHub CI — correctly classified as safe
 
 ---
 
 ## Phase 3 — Real-Time API & iPhone App ✅ COMPLETE
 
-**Goal:** Expose detectors via REST API + WebSocket, build iPhone companion app.
-
 ### Backend (FastAPI)
-- File: `src/api/server.py`
-- JWT authentication (python-jose + PBKDF2 hashing)
-- REST endpoints: `/health`, `/detectors`, `/events`, `/scan/*`, `/network/*`, `/gmail/*`
-- WebSocket `/ws` — streams alerts to iPhone in real time as they fire
-- CORS enabled for local network access from iPhone
+- JWT authentication, REST + WebSocket, CORS for iPhone
 
 ### iPhone App (React Native + Expo)
-- `mobile/src/screens/DashboardScreen.js` — Live threat feed, severity counts, system health
-- `mobile/src/screens/AlertScreen.js` — Full alert list with filter by severity
-- `mobile/src/screens/NetworkScreen.js` — 3 tabs: Live connections (5s refresh), Anomalies, System stats (3s refresh)
-- `mobile/src/screens/ScanScreen.js` — Gmail scanner, system logs viewer, vulnerability scanner
-- `mobile/src/screens/SettingsScreen.js` — Backend URL, credentials, token management
-- `mobile/src/services/api.js` — API client with timeout handling
-- `mobile/src/services/websocket.js` — Auto-reconnect WebSocket with exponential backoff
+- Dashboard, Alerts, Network Monitor, Scanner, Settings screens
+- WebSocket auto-reconnect with exponential backoff
 
 ---
 
 ## Phase 4 — Real Data Sources ✅ COMPLETE
 
-**Goal:** Remove all demo/fake data. Everything uses real system data.
-
-### What was replaced
-
 | Before | After |
 |---|---|
-| Fake generated network flows | `netstat -anp tcp` — real live TCP connections, no root needed |
-| Hardcoded sample emails | Gmail OAuth2 with PKCE — real inbox via Google API |
-| No system logs | macOS `log show` — real system logs filtered by type (auth/network/security) |
-| Fake CPU/memory stats | `psutil` — real CPU %, memory, disk, network I/O |
-
-### Key files
-- `src/api/system_monitor.py` — Live connections, system stats, real log fetching
-- `src/api/gmail_oauth.py` — Full Gmail OAuth2 flow (consent → callback → token → fetch inbox)
-- `docs/gmail_setup.md` — Step-by-step Google Cloud Console setup guide
-
-### Technical challenges solved
-- **psutil needs root** for `net_connections()` on macOS → switched to `netstat` subprocess (no root)
-- **Gmail PKCE code_verifier lost between requests** → stored `_pending_flow` as a module-level global so same flow object is reused in callback
-- **Amazon OTP flagged as phishing** → brand-label matching checks each domain label against trusted brands set, so `amazon.co.uk` matches `amazon`
+| Fake flows | netstat (no root needed) |
+| Hardcoded emails | Gmail OAuth2 with PKCE |
+| No system logs | macOS `log show` |
+| Fake stats | psutil live data |
 
 ---
 
-## Phase 5 — Live Packet Capture 🔜 NEXT
+## Phase 5 — Live Packet Capture + Deep Traffic Analysis 🔜
 
-**Goal:** Capture real network packets on your Mac and feed them into the anomaly detector instead of reading CSVs.
+**Goal:** Capture every real packet on the Mac. Run deep analysis — not just anomaly scoring but signature matching, DNS inspection, TLS fingerprinting, and ARP attack detection.
 
-### Why this matters
-Right now the network anomaly detector reads pre-made CSV files or individual `netstat` snapshots. Phase 5 gives it a live, continuous feed of every packet coming in/out of your Mac — so it can catch attacks the moment they start.
+### 5a. Packet Sniffer (`src/capture/packet_sniffer.py`)
+- Use `scapy` to sniff the active network interface
+- Requires `sudo` (or set packet capture entitlements on Python binary)
+- Capture: IP src/dst, port src/dst, protocol, packet size, TCP flags, payload (where unencrypted)
+- Stream packets into an async queue consumed by all Phase 5 analyzers
 
-### What to build
+### 5b. Snort Signature Matching (`src/detectors/signature_detector.py`)
+**This is the biggest single coverage boost — 50,000+ known attack patterns.**
 
-#### 5a. Packet Sniffer (`src/capture/packet_sniffer.py`)
-- Use `scapy` (or `pyshark` wrapping tshark) to sniff on the active interface
-- Requires: `sudo` on macOS (or set capabilities on Python binary)
-- Capture: IP src/dst, port src/dst, protocol, packet size, TCP flags
-- Run as an async background task that streams packets into a queue
+- Download free Snort/Suricata community rules from `rules.emergingthreats.net`
+- Parse rules into fast pattern matchers (Aho-Corasick algorithm for speed)
+- Match against live packet payloads and headers
+- Catches: EternalBlue (WannaCry), Shellshock, Log4Shell, Heartbleed, SQL injection over HTTP, XSS, directory traversal, Mimikatz traffic, known exploit kits
+- Update rules daily via background task
+- Alert: rule name, CVE references, matched packet
 
-#### 5b. Flow Aggregator (`src/capture/flow_aggregator.py`)
-- Group individual packets into 5-second flows
-- Compute per-flow features: bytes sent/recv, packet count, duration, mean inter-arrival time
-- Output a feature dict matching the format the Isolation Forest model expects
+```python
+class SignatureDetector(BaseDetector):
+    async def load_rules(self, rules_path: str):
+        # Parse Snort rule format:
+        # alert tcp any any -> any 80 (msg:"SQL injection"; content:"' OR '1'='1"; ...)
+        ...
 
-#### 5c. Live Feed Integration (`src/api/server.py`)
-- New endpoint: `GET /network/capture/start` — start sniffing (requires server to be run with sudo or capabilities)
-- New endpoint: `GET /network/capture/stop`
-- WebSocket push: when anomaly score > 0.7, push alert to iPhone immediately
+    async def match_packet(self, packet) -> list[SignatureAlert]:
+        # Check packet against all loaded rules
+        # Return list of matched rules with severity
+        ...
+```
 
-#### 5d. App UI (`mobile/src/screens/NetworkScreen.js`)
-- Add "Capture" tab with start/stop button
-- Live packet rate graph (packets/sec)
-- Instant alert card when anomaly detected
+### 5c. DNS Monitor (`src/detectors/dns_monitor.py`)
+**Catches malware that hides C2 traffic inside DNS — a very common evasion technique.**
+
+- Intercept all DNS queries from the Mac (sniff UDP port 53 packets)
+- Check every queried domain against:
+  - Malware domain blocklists (abuse.ch, Malware Domain List, URLhaus)
+  - DGA detection — domains that look randomly generated (high entropy score)
+  - DNS tunneling detection — unusually long subdomains or high query rate
+- DNS Sinkholing: redirect known-bad domains to 127.0.0.1 by modifying /etc/hosts or running a local DNS resolver
+- Cache blocklists locally — update daily
+
+```python
+class DNSMonitor(BaseDetector):
+    BLOCKLIST_URLS = [
+        "https://urlhaus.abuse.ch/downloads/hostfile/",
+        "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts.txt",
+    ]
+
+    def is_dga_domain(self, domain: str) -> bool:
+        # Calculate entropy of domain label
+        # High entropy (> 3.5 bits/char) = likely DGA
+        ...
+
+    def detect_dns_tunneling(self, query: str) -> bool:
+        # Subdomain > 50 chars = likely data encoded in DNS
+        # > 100 DNS queries/minute to same domain = tunneling
+        ...
+```
+
+### 5d. TLS/HTTPS Traffic Analyzer (`src/detectors/tls_analyzer.py`)
+**We cannot decrypt HTTPS — but we can still catch malware by its TLS fingerprint.**
+
+- Extract TLS ClientHello from packets (unencrypted part of TLS handshake)
+- Compute JA3 hash — a fingerprint of how a program does TLS (cipher suites, extensions, elliptic curves)
+- Check JA3 hash against known-malicious fingerprint database (Salesforce JA3 DB — free)
+- Different browsers and malware families have unique JA3 fingerprints
+- Also check: SNI (Server Name Indication) against malware domain lists, self-signed certificates, expired certificates, unusual cipher suites
+- Catches: Cobalt Strike beacons, Meterpreter, known RAT families, even inside HTTPS
+
+```python
+class TLSAnalyzer(BaseDetector):
+    KNOWN_MALWARE_JA3 = {
+        "e7d705a3286e19ea42f587b344ee6865": "Cobalt Strike default",
+        "6734f37431670b3ab4292b8f60f29984": "Trickbot",
+        "51c64c77e60f3980eea90869b68c58a8": "Dridex",
+    }
+
+    def compute_ja3(self, tls_client_hello: bytes) -> str:
+        # SSLVersion, Ciphers, Extensions, EllipticCurves, EllipticCurvePoints
+        # Concatenate → MD5 hash
+        ...
+```
+
+### 5e. ARP Spoofing / MITM Detector (`src/detectors/arp_monitor.py`)
+**Catches man-in-the-middle attacks where attacker intercepts your traffic on the local network.**
+
+- Monitor ARP packets (who-has / is-at messages)
+- Build a table of IP → MAC address mappings
+- Alert if:
+  - Same IP suddenly has a different MAC address (ARP cache poisoning)
+  - Gateway MAC address changes (attacker positioned between you and router)
+  - Gratuitous ARP flood (rapid unsolicited ARP replies — sign of attack)
+- Response: alert + optionally send corrective ARP to restore real mapping
+
+### 5f. Flow Aggregator + API Updates
+- `src/capture/flow_aggregator.py` — groups packets into 5-sec flows for ML
+- New endpoints: `GET /network/capture/start`, `GET /network/capture/stop`
+- New iPhone tab: Capture — start/stop, live packets/sec graph, instant alerts
 
 ### Dependencies to add
 ```
 scapy>=2.5.0
 ```
 
-### Estimated effort: 2 days
+### Estimated effort: 5 days
 
 ---
 
-## Phase 6 — Auto-Defense / IP Blocking Engine 🔜
+## Phase 6 — Auto-Defense: IP Blocking + VirusTotal 🔜
 
-**Goal:** When an attack is confirmed, automatically block the attacker's IP at the firewall level — no manual action required.
+**Goal:** When an attack is confirmed, automatically block the attacker's IP. Cross-check any IP or domain against VirusTotal's 70+ engine database.
 
-### Why this matters
-Right now CyberGuard detects a brute force attack and sends you an alert. You have to manually decide what to do. Phase 6 makes the system act: it adds the attacker's IP to macOS's built-in `pf` firewall, blocking all future connections from that IP automatically.
+### 6a. Firewall Manager (`src/defense/firewall.py`)
+- macOS `pfctl` — built-in firewall, no extra install
+- Requires `sudo` to run
+- `block_ip(ip, reason, duration_seconds)` — adds to pf table
+- `unblock_ip(ip)` — removes from pf table
+- Auto-expire: background task checks every 60s, unblocks expired IPs
+- Persists across restarts (reapplies pf rules on server startup)
 
-### What to build
-
-#### 6a. Firewall Manager (`src/defense/firewall.py`)
-```python
-class FirewallManager:
-    BLOCK_TABLE = "cyberguard_blocklist"
-
-    async def block_ip(self, ip: str, reason: str, duration_seconds: int = 3600):
-        """Add IP to pf blocklist. Duration 0 = permanent."""
-        # pfctl -t cyberguard_blocklist -T add <ip>
-        ...
-
-    async def unblock_ip(self, ip: str):
-        # pfctl -t cyberguard_blocklist -T delete <ip>
-        ...
-
-    async def list_blocked(self) -> list[dict]:
-        # pfctl -t cyberguard_blocklist -T show
-        ...
-
-    async def setup_pf_rule(self):
-        """Create the pf anchor rule if not already present."""
-        # Writes /etc/pf.anchors/cyberguard
-        # Adds 'anchor cyberguard' to /etc/pf.conf
-        # pfctl -f /etc/pf.conf
-        ...
-```
-
-- Uses macOS `pfctl` (packet filter control) — built-in, no extra install
-- Requires `sudo` — server must run with elevated permissions for auto-block to work
-- Blocked IPs auto-expire after configurable duration (default 1 hour)
-- Maintains a SQLite table of blocked IPs with timestamps and reasons
-
-#### 6b. Block List Store (`src/defense/block_store.py`)
-- SQLite database: `data/blocklist.db`
-- Schema: `ip, reason, blocked_at, expires_at, attack_type, auto_unblocked`
-- Background task: every 60 seconds, unblock IPs whose `expires_at` has passed
-- Persistence: survives server restarts (reapplies pf rules on startup)
-
-#### 6c. API Endpoints (`src/api/server.py`)
-```
-GET  /defense/blocklist          — list all currently blocked IPs
-POST /defense/block              — manually block an IP {ip, reason, duration_hours}
-POST /defense/unblock            — manually unblock {ip}
-GET  /defense/history            — full block/unblock audit log
-```
-
-#### 6d. iPhone App (`mobile/src/screens/DefenseScreen.js`) — New Screen
-- Show active blocklist with countdown timers
-- "Block IP" manual action on any connection in the Live tab
-- Push notification when an IP is auto-blocked
-
-### Setup required (one-time)
+One-time setup:
 ```bash
-# Run once as root to set up the pf anchor
 sudo python -m src.defense.setup_pf
 ```
 
-This adds to `/etc/pf.conf`:
+Adds to `/etc/pf.conf`:
 ```
 table <cyberguard_blocklist> persist
 block drop from <cyberguard_blocklist> to any
+```
+
+### 6b. VirusTotal Integration (`src/intelligence/virustotal.py`)
+**Check any IP, domain, or URL against 70+ security vendors — free tier: 500 req/day.**
+
+```python
+class VirusTotalClient:
+    async def check_ip(self, ip: str) -> VTResult:
+        # GET https://www.virustotal.com/api/v3/ip_addresses/{ip}
+        # Returns: malicious count, suspicious count, country, ASN, last analysis date
+        ...
+
+    async def check_domain(self, domain: str) -> VTResult:
+        # GET https://www.virustotal.com/api/v3/domains/{domain}
+        ...
+
+    async def check_file_hash(self, sha256: str) -> VTResult:
+        # GET https://www.virustotal.com/api/v3/files/{sha256}
+        ...
+```
+
+- Called automatically when: new outbound connection to unknown IP, DNS query to unknown domain, new file downloaded
+- If VT reports > 3 engines flagging as malicious → trigger auto-block rule
+- Cache results locally for 24 hours (avoid burning API quota)
+
+### 6c. Block List Store (`src/defense/block_store.py`)
+- SQLite: `data/blocklist.db`
+- Schema: `ip, reason, blocked_at, expires_at, attack_type, vt_score, auto_unblocked`
+
+### 6d. API Endpoints
+```
+GET  /defense/blocklist          — active blocks with countdowns
+POST /defense/block              — manual block {ip, reason, duration_hours}
+POST /defense/unblock            — manual unblock {ip}
+GET  /defense/history            — full audit log
+POST /intelligence/check         — on-demand VT check for IP/domain/hash
+```
+
+### 6e. iPhone: Defense Screen (new)
+- Active blocklist with countdown timers
+- "Block IP" button on any live connection
+- On-demand VirusTotal check from the app
+
+### Estimated effort: 3 days
+
+---
+
+## Phase 7 — Process Monitor + Persistence + USB 🔜
+
+**Goal:** Watch every running process, detect malware that survives reboots, alert on suspicious hardware.
+
+### 7a. Process Scanner (`src/detectors/process_monitor.py`)
+
+Suspicious patterns:
+- **Name matching**: nc, ncat, netcat, xmrig, minerd, msfconsole, cobaltstrike, beacon, mimikatz, empire
+- **CPU spike**: 3-minute rolling average > 70% → crypto miner heuristic
+- **Malware ports**: outbound connection to 4444, 1337, 31337, 6666, 12345
+- **Suspicious parent**: Terminal spawned Python which spawned bash (unusual chain)
+- **Hidden process**: process name starts with `.` or runs from /tmp
+- **Unsigned binary**: macOS codesign check — unsigned apps from unusual paths
+
+```python
+async def check_codesign(self, path: str) -> bool:
+    result = await asyncio.create_subprocess_exec(
+        "codesign", "--verify", "--strict", path,
+        stderr=asyncio.subprocess.PIPE
+    )
+    _, stderr = await result.communicate()
+    return result.returncode == 0
+```
+
+### 7b. Persistence Monitor (`src/detectors/persistence_monitor.py`)
+**Malware survives reboots by adding startup items. This catches that.**
+
+Watch these locations for unexpected changes:
+```
+~/Library/LaunchAgents/          — user startup daemons
+/Library/LaunchAgents/           — system startup daemons
+/Library/LaunchDaemons/          — system services
+/etc/hosts                       — DNS override tampering
+~/.ssh/authorized_keys           — SSH backdoor keys
+/etc/sudoers                     — privilege escalation backdoor
+~/.bashrc, ~/.zshrc, ~/.profile  — shell persistence
+/etc/crontab, ~/Library/cron     — scheduled task persistence
+```
+
+How it works:
+- On first run: hash all files in these locations, save baseline to `data/persistence_baseline.json`
+- Every 5 minutes: re-hash and compare
+- Alert on: new file added, existing file changed, file deleted
+- For LaunchAgents: parse plist and show the command that runs on startup
+- Action: alert + show the exact file that changed + diff the change
+
+### 7c. USB / Hardware Monitor (`src/detectors/usb_monitor.py`)
+**Alert whenever a new USB device connects — catches BadUSB and rogue HID devices.**
+
+- Use macOS `system_profiler SPUSBDataType` to get current USB devices
+- Poll every 10 seconds, compare to known device list
+- Alert on new device: show vendor, product name, vendor ID, product ID
+- Classify risk: Human Interface Devices (keyboards/mice) = higher risk (BadUSB), mass storage = medium
+- Store approved devices list — user can mark devices as trusted in the app
+
+### 7d. APIs
+```
+GET  /processes/suspicious        — flagged processes
+GET  /processes/all               — all running processes with risk scores
+POST /processes/kill/{pid}        — kill process
+GET  /persistence/baseline        — current baseline
+GET  /persistence/changes         — recent changes detected
+POST /persistence/approve         — mark a change as approved (not malware)
+GET  /usb/devices                 — current USB devices
+GET  /usb/alerts                  — new device alerts
+POST /usb/trust/{device_id}       — mark device as trusted
 ```
 
 ### Estimated effort: 3 days
 
 ---
 
-## Phase 7 — Process Monitor & Kill Engine 🔜
+## Phase 8 — File Scanner + Integrity Monitor 🔜
 
-**Goal:** Detect malicious processes (crypto miners, reverse shells, keyloggers) and optionally kill them automatically.
+**Goal:** Detect malware in downloaded files, detect obfuscated scripts, detect tampering with system files.
 
-### Why this matters
-Not all attacks come through the network. Some malware runs as a process on your Mac — a crypto miner consuming 100% CPU, a reverse shell phoning home, or a keylogger reading your keystrokes. Phase 7 makes CyberGuard watch every running process.
+### 8a. Malware Hash Scanner (`src/detectors/file_scanner.py`)
+- SHA-256 hash any file
+- Check against:
+  - **VirusTotal** (Phase 6b client) — 70+ engine verdict
+  - **MalwareBazaar** (abuse.ch) — free malware hash feed, no API key needed
+  - **NSRL** (optional) — 200M+ legitimate file hashes (eliminates false positives)
+- Flag: malware family, threat category, detection count
+- Quarantine: move to `~/CyberGuardQuarantine/` + strip execute bit + log
 
-### What to build
+### 8b. Downloads Watcher (`src/capture/downloads_watcher.py`)
+- `watchdog` library watches: ~/Downloads, ~/Desktop, /tmp
+- Every new file → auto-scan within 3 seconds
+- Risk check sequence:
+  1. Extension check (dmg, pkg, exe, scr, vbs, ps1 = risky)
+  2. `file` command — detect actual executable regardless of extension
+  3. Hash check (MalwareBazaar + VT)
+  4. Static analysis (see 8c)
 
-#### 7a. Process Scanner (`src/detectors/process_monitor.py`)
-```python
-class ProcessMonitor(BaseDetector):
-    SUSPICIOUS_PROCESS_NAMES = {
-        "nc", "ncat", "netcat",           # netcat reverse shells
-        "cryptominer", "xmrig", "minerd", # crypto miners
-        "msfconsole", "msfvenom",         # Metasploit
-        "mimikatz",                       # credential dumper
-        "cobaltstrike", "beacon",         # C2 agents
-    }
+### 8c. Static Script Analyzer (`src/detectors/script_analyzer.py`)
+**Catches malicious scripts even if the hash is unknown.**
 
-    async def scan(self) -> list[ProcessAlert]:
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'cpu_percent',
-                                          'connections', 'open_files']):
-            # Check: name in suspicious list
-            # Check: CPU > 80% sustained (crypto miner heuristic)
-            # Check: has outbound TCP connection to non-browser port
-            # Check: opened files in /tmp or unusual paths
-            # Check: process spawned from unusual parent (e.g. bash spawned from Python)
-            ...
+Signals:
+- **Base64 encoded payload**: `base64 -d` or `echo <long_base64> | python`
+- **Obfuscated commands**: hex-encoded strings, char code concatenation
+- **Suspicious curl/wget**: downloading and executing in one command (`curl url | bash`)
+- **Reverse shell patterns**: `/dev/tcp/`, `nc -e /bin/bash`, `python -c 'import socket'`
+- **Privilege escalation**: `sudo` without password, /etc/sudoers modification
+- **Persistence planting**: LaunchAgent/cron install commands in script body
+- **Office macro detection**: check .docm, .xlsm for embedded VBA macros
+- Applies to: .sh, .py, .rb, .js, .ps1, .vbs, .bat files
+
+### 8d. File Integrity Monitoring (FIM) (`src/detectors/file_integrity.py`)
+**Detect if critical system files have been tampered with.**
+
+Protected file list:
+```
+/etc/hosts              — DNS override attack
+/etc/sudoers            — privilege escalation
+/etc/passwd             — user account tampering
+~/.ssh/authorized_keys  — SSH backdoor
+~/.bashrc / ~/.zshrc    — shell persistence
+/usr/local/bin/*        — tool replacement attack
+/Applications/*         — app tampering
 ```
 
-- Runs every 30 seconds as a background task
-- CPU spike detection: track rolling average, alert if 3-minute average > 70%
-- Suspicious network connections: process has connection to known C2 ports (4444, 1337, 31337)
-- Unusual parent: browser spawned a shell, shell spawned Python, etc.
+How it works:
+- Baseline hash stored at first run in `data/fim_baseline.json`
+- inotify-style monitoring via `watchdog` on macOS
+- Alert on any change: show file, old hash, new hash, what changed (using diff)
+- Critical files (sudoers, hosts, authorized_keys) trigger immediate high-severity alert
 
-#### 7b. Process Kill API
+### 8e. API + iPhone
 ```
-GET  /processes/suspicious        — list processes flagged as suspicious
-POST /processes/kill/{pid}        — kill a specific process (requires confirmation)
-POST /processes/kill/auto-enable  — enable auto-kill for critical-severity processes
+POST /scan/file              — scan specific file
+GET  /scan/file/history      — recent scan results
+GET  /fim/status             — FIM status
+GET  /fim/changes            — recent integrity violations
+POST /fim/approve/{path}     — mark change as intentional
+GET  /quarantine/list        — quarantined files
+POST /quarantine/restore     — restore false positive
 ```
-
-#### 7c. iPhone UI
-- New tab in the existing Scan screen: "Processes"
-- Show running processes sorted by risk
-- Swipe-to-kill action with confirmation dialog
-- Badge count in tab bar if suspicious processes found
-
-### Estimated effort: 2 days
-
----
-
-## Phase 8 — File Scanner & Download Monitor 🔜
-
-**Goal:** Scan files for known malware using hash databases, and watch the Downloads folder for new dangerous files.
-
-### Why this matters
-When you download a file, CyberGuard should instantly check if it is known malware — like what your antivirus does, but without sending your files to a third-party cloud service.
-
-### What to build
-
-#### 8a. Hash Scanner (`src/detectors/file_scanner.py`)
-- Download NSRL (National Software Reference Library) hash database — free, ~5GB
-- Or use VirusTotal API (free tier: 500 requests/day) for hash lookups
-- SHA-256 hash each new file, look up against local hash DB
-- Flag exact matches as malware, report family name and threat category
-
-#### 8b. Downloads Watcher (`src/capture/downloads_watcher.py`)
-```python
-import watchdog.observers  # pip install watchdog
-
-class DownloadsWatcher:
-    WATCH_PATHS = [
-        Path.home() / "Downloads",
-        Path.home() / "Desktop",
-        Path("/tmp"),
-    ]
-
-    def on_created(self, event):
-        """Triggered when a new file appears."""
-        asyncio.create_task(self.scan_file(event.src_path))
-
-    async def scan_file(self, path: str):
-        # 1. Compute SHA-256
-        # 2. Check local hash DB
-        # 3. If not found locally, check VirusTotal API
-        # 4. Check file extension (exe, dmg, pkg, scr, vbs = risky)
-        # 5. For scripts: check content for suspicious patterns
-        # 6. Emit alert if any risk found
-        ...
-```
-
-#### 8c. Static Analysis Helpers
-- Executable check: `file` command to detect actual executables regardless of extension
-- Script analysis: look for base64-encoded payloads, obfuscated strings, unusual curl/wget commands
-- Office macro detection: check .docm, .xlsm for embedded macros
-
-#### 8d. API + iPhone
-```
-POST /scan/file          — scan a specific file path
-GET  /scan/file/history  — recent file scan results
-```
-iPhone: "File Scan" tab — drag-and-drop file path, show hash, verdict, VirusTotal link
 
 ### Dependencies to add
 ```
@@ -349,103 +469,222 @@ watchdog>=4.0.0
 
 ## Phase 9 — Auto-Response Rules Engine 🔜
 
-**Goal:** Define automated response rules in plain English. When a threat matches, the system picks the right response automatically.
+**Goal:** Connect every detector to every response action via simple YAML rules — no coding required.
 
-### Why this matters
-Instead of hard-coding "always block for 1 hour", you want to say: "If I see a brute force attack, block the IP for 2 hours and send me a push notification." Phase 9 is the brain that connects detections to responses.
+### 9a. Rules Engine (`src/defense/rules_engine.py`)
 
-### What to build
+Example rules (`config/defense_rules.yaml`):
+```yaml
+rules:
+  - name: Block brute force
+    trigger:
+      detector: log_analyzer
+      attack_type: brute_force
+      severity: high
+    cooldown_minutes: 30
+    actions:
+      - type: block_ip
+        duration_hours: 2
+      - type: push_notification
+        message: "Brute force blocked: {ip} ({attempts} attempts)"
 
-#### 9a. Rules Engine (`src/defense/rules_engine.py`)
-```python
-# Example rules (stored in config/defense_rules.yaml)
-EXAMPLE_RULES = [
-    {
-        "name": "Block brute force attackers",
-        "trigger": {"detector": "log_analyzer", "attack_type": "brute_force", "severity": "high"},
-        "actions": [
-            {"type": "block_ip", "duration_hours": 2},
-            {"type": "push_notification", "message": "Brute force blocked: {ip}"},
-            {"type": "log_event"},
-        ]
-    },
-    {
-        "name": "Kill crypto miner",
-        "trigger": {"detector": "process_monitor", "attack_type": "crypto_miner", "severity": "critical"},
-        "actions": [
-            {"type": "kill_process", "pid": "{pid}"},
-            {"type": "block_ip", "duration_hours": 24},
-            {"type": "push_notification", "message": "Crypto miner killed: {process_name}"},
-        ]
-    },
-    {
-        "name": "Quarantine malicious download",
-        "trigger": {"detector": "file_scanner", "verdict": "malware"},
-        "actions": [
-            {"type": "quarantine_file", "path": "{file_path}"},
-            {"type": "push_notification", "message": "Malware quarantined: {filename}"},
-        ]
-    },
-    {
-        "name": "Alert on suspicious process (no auto-kill)",
-        "trigger": {"detector": "process_monitor", "severity": "medium"},
-        "actions": [
-            {"type": "push_notification", "message": "Suspicious process: {process_name} (PID {pid})"},
-        ]
-    },
-]
+  - name: Kill crypto miner
+    trigger:
+      detector: process_monitor
+      attack_type: crypto_miner
+      severity: critical
+    actions:
+      - type: kill_process
+      - type: block_ip
+        duration_hours: 24
+      - type: push_notification
+        message: "Crypto miner killed: {process_name}"
+
+  - name: Quarantine malware download
+    trigger:
+      detector: file_scanner
+      verdict: malware
+    actions:
+      - type: quarantine_file
+      - type: push_notification
+        message: "Malware quarantined: {filename} ({vt_detections} engines)"
+
+  - name: Block known-bad IP (VirusTotal)
+    trigger:
+      detector: virustotal
+      malicious_count_gt: 5
+    actions:
+      - type: block_ip
+        duration_hours: 48
+      - type: push_notification
+
+  - name: Alert on DNS malware domain
+    trigger:
+      detector: dns_monitor
+      category: malware_domain
+    actions:
+      - type: block_domain
+      - type: push_notification
+        message: "Malware domain blocked: {domain}"
+
+  - name: Alert on Snort signature match
+    trigger:
+      detector: signature_detector
+      severity: critical
+    actions:
+      - type: block_ip
+        duration_hours: 1
+      - type: push_notification
+        message: "Known attack blocked: {rule_name}"
+
+  - name: Persistence change alert
+    trigger:
+      detector: persistence_monitor
+    actions:
+      - type: push_notification
+        message: "System file changed: {file_path}"
+      - type: log_event
+
+  - name: New USB device alert
+    trigger:
+      detector: usb_monitor
+      device_type: hid
+    actions:
+      - type: push_notification
+        message: "New USB device: {device_name}"
 ```
 
-#### 9b. Action Handlers
-Each action type maps to a handler function:
-- `block_ip` → calls `FirewallManager.block_ip()`
-- `kill_process` → calls `psutil.Process(pid).terminate()`
-- `quarantine_file` → moves file to `~/CyberGuardQuarantine/` and strips execute permission
-- `push_notification` → iOS push via APNs (Apple Push Notification Service)
-- `log_event` → writes structured entry to audit log
-- `webhook` → POST to a URL (e.g. Slack, Discord, n8n)
+### 9b. All Available Actions
+| Action | What it does |
+|---|---|
+| `block_ip` | pfctl firewall block, configurable duration |
+| `block_domain` | Add to /etc/hosts sinkhole → 127.0.0.1 |
+| `kill_process` | psutil terminate + SIGKILL fallback |
+| `quarantine_file` | Move to ~/CyberGuardQuarantine/, strip perms |
+| `push_notification` | iOS push via Expo |
+| `webhook` | POST to Slack / Discord / n8n URL |
+| `log_event` | Structured entry in audit log |
+| `run_script` | Execute a shell script (advanced users) |
 
-#### 9c. Rules Config File (`config/defense_rules.yaml`)
-- YAML format — human-readable, easy to edit without coding
-- Hot-reload: server watches the file for changes, applies new rules without restart
-- Rule priority ordering: higher priority rules evaluated first
-- Cooldown: prevent same rule firing twice within N minutes for same attacker
+### 9c. Rules Config Features
+- Hot-reload: changes applied without server restart
+- Cooldown: same rule won't fire twice for same attacker within N minutes
+- Priority ordering: critical rules evaluated first
+- Dry-run mode: log what WOULD happen without taking action (safe testing)
 
-#### 9d. API + iPhone
-```
-GET  /defense/rules              — list all active rules
-POST /defense/rules              — add a new rule
-PUT  /defense/rules/{name}       — update a rule
-DEL  /defense/rules/{name}       — delete a rule
-GET  /defense/rules/history      — log of which rules fired and what actions were taken
-```
-
-iPhone: "Rules" tab in Defense screen — toggle rules on/off, see recent rule activations
-
-#### 9e. iOS Push Notifications
-- Uses Expo Push Notifications (simplest path — no Apple Developer account needed for local testing)
-- Server calls Expo's push endpoint when a rule fires
-- User must allow notifications in iPhone when prompted
+### 9d. iOS Push Notifications
+- Uses Expo Push API (no Apple Developer account needed)
+- Token stored in `data/expo_push_token.json`
+- Categories: threat (red), warning (orange), info (blue)
 
 ### Dependencies to add
 ```
-exponent-server-sdk>=2.1.0   # Expo push notifications
-watchdog>=4.0.0              # Config file hot-reload
+exponent-server-sdk>=2.1.0
+watchdog>=4.0.0
 ```
 
 ### Estimated effort: 4 days
 
 ---
 
-## Phase 10 — Threat Intelligence Feed 🔜 (Future)
+## Phase 10 — Threat Intelligence Feeds 🔜
 
-**Goal:** Automatically cross-reference attackers against public threat intelligence databases.
+**Goal:** Automatically know about known-bad IPs and domains before they even connect to your Mac.
 
 ### What to build
-- Pull blocklists from AbuseIPDB, Emerging Threats, Spamhaus
-- Cache locally (updated daily) so lookups are instant and offline
-- Auto-tag IPs seen in threat feeds with source and category (e.g. "known botnet C2")
-- Feed results into rules engine: IPs in threat feeds get auto-blocked immediately
+
+#### 10a. Feed Manager (`src/intelligence/feed_manager.py`)
+Daily-updated blocklists (all free, no API key for most):
+
+| Feed | Content | URL |
+|---|---|---|
+| AbuseIPDB | Reported malicious IPs | api.abuseipdb.com (free 1k/day) |
+| Emerging Threats | Known attack IPs | rules.emergingthreats.net |
+| Spamhaus DROP | Botnet / spam IPs | www.spamhaus.org/drop/ |
+| abuse.ch URLhaus | Active malware URLs | urlhaus.abuse.ch |
+| abuse.ch MalwareBazaar | Malware hashes | bazaar.abuse.ch |
+| Feodo Tracker | Botnet C2 IPs | feodotracker.abuse.ch |
+| CINS Army | Attack IPs | cinsscore.com |
+
+#### 10b. Local Cache
+- SQLite: `data/threat_intel.db`
+- Tables: `bad_ips`, `bad_domains`, `bad_hashes`
+- Update on startup + daily refresh task
+- All lookups are local → instant, no API quota used
+
+#### 10c. Integration Points
+- Network connections: every new IP checked against `bad_ips` cache → instant block if found
+- DNS monitor: every query checked against `bad_domains` → instant sinkhole
+- File scanner: every hash checked against `bad_hashes` → instant quarantine
+- Rules engine: threat intel matches trigger their own rule category
+
+### Estimated effort: 2 days
+
+---
+
+## Phase 11 — Wi-Fi & Network Security 🔜
+
+**Goal:** Protect against attacks at the Wi-Fi and LAN level — rogue access points, network eavesdropping, ARP poisoning.
+
+### 11a. Wi-Fi Monitor (`src/detectors/wifi_monitor.py`)
+- Use macOS `airport` utility to scan nearby Wi-Fi networks
+- Detect Evil Twin attacks: same SSID as your network but different BSSID/MAC
+- Alert if connected network suddenly changes BSSID (AP replacement attack)
+- Detect deauthentication flood (Wi-Fi jamming) — large number of deauth packets
+- Alert if connected to open (unencrypted) network
+- Show signal strength and encryption type for all nearby networks
+
+```bash
+# macOS airport utility (built-in, no install)
+/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -s
+```
+
+### 11b. LAN Scanner (`src/detectors/lan_scanner.py`)
+- Discover all devices on local network (ARP scan, no root needed)
+- Alert on new unknown devices joining the network
+- Detect if any device is doing ARP spoofing (poisoning the gateway ARP table)
+- Show device list: IP, MAC, vendor (from MAC OUI database), first/last seen
+
+### 11c. Network Anomaly Extension
+- Detect unusually high ARP traffic (ARP flood = MITM setup)
+- Detect ICMP redirect attacks (routing manipulation)
+- Detect suspicious DHCP servers (rogue DHCP server on LAN)
+
+### Estimated effort: 3 days
+
+---
+
+## Phase 12 — Browser & Extension Security 🔜
+
+**Goal:** Detect malicious browser extensions and catch when browsers are used as attack vectors.
+
+### 12a. Extension Scanner (`src/detectors/browser_monitor.py`)
+Check installed extensions in all browsers:
+```
+~/Library/Application Support/Google/Chrome/Default/Extensions/
+~/Library/Application Support/Firefox/Profiles/*/extensions/
+~/Library/Application Support/Microsoft Edge/Default/Extensions/
+```
+
+For each extension:
+- Extract extension ID and version
+- Check against known-malicious extension lists (CRXcavator, ExtAnalysis)
+- Check permissions — extensions with `tabs`, `webRequest`, `cookies`, `history` = high risk
+- Alert on newly installed extension or permission change
+
+### 12b. Browser Network Monitor
+- Monitor browser processes (Chrome, Firefox, Safari) network connections
+- Flag connections to known tracking/malware domains
+- Detect credential harvesting: browser sending POST to unexpected domain shortly after you type in a form
+
+### 12c. API + iPhone
+```
+GET  /browser/extensions          — all installed extensions with risk ratings
+GET  /browser/alerts              — suspicious extension events
+POST /browser/extensions/approve  — mark extension as trusted
+```
+
+### Estimated effort: 2 days
 
 ---
 
@@ -457,30 +696,46 @@ watchdog>=4.0.0              # Config file hot-reload
 | API framework | FastAPI + Uvicorn |
 | ML / anomaly detection | scikit-learn (Isolation Forest) |
 | Real-time streaming | WebSocket (FastAPI native) |
-| Packet capture | scapy (Phase 5) |
-| Firewall control | macOS pfctl (Phase 6) |
-| Process monitoring | psutil |
-| File watching | watchdog (Phase 8) |
-| Database | SQLite via aiosqlite (Phase 6+) |
+| Packet capture | scapy |
+| Signature matching | Snort/Suricata community rules + Aho-Corasick |
+| DNS analysis | scapy + abuse.ch feeds |
+| TLS analysis | JA3 fingerprinting via scapy |
+| Firewall control | macOS pfctl |
+| Process monitoring | psutil + macOS codesign |
+| File watching | watchdog |
+| Threat intelligence | AbuseIPDB, Spamhaus, Feodo, URLhaus, MalwareBazaar |
+| VirusTotal | API v3 (files, IPs, domains, URLs) |
+| Database | SQLite via aiosqlite |
 | Mobile app | React Native + Expo |
-| Push notifications | Expo Push API (Phase 9) |
+| Push notifications | Expo Push API |
 | Auth | JWT (python-jose) + PBKDF2 |
 | Logging | structlog (JSON structured) |
 | CI | GitHub Actions (ruff + bandit + pytest) |
 
 ---
 
-## Build Order Recommendation
+## Build Order
 
 ```
-Phase 5 (Packet Capture) → Phase 6 (IP Blocking) → Phase 7 (Process Monitor)
-         ↓
-Phase 9 (Rules Engine) — connects all detectors to all response actions
-         ↓
-Phase 8 (File Scanner) → Phase 10 (Threat Intel)
+Phase 5 (Packets + Signatures + DNS + TLS + ARP)
+    ↓
+Phase 6 (IP Blocking + VirusTotal)
+    ↓
+Phase 7 (Process + Persistence + USB)
+    ↓
+Phase 9 (Rules Engine — connects everything)
+    ↓
+Phase 8 (File Scanner + FIM)
+    ↓
+Phase 10 (Threat Intel Feeds)
+    ↓
+Phase 11 (Wi-Fi Security)
+    ↓
+Phase 12 (Browser Security)
 ```
 
-Start with Phase 6 (IP Blocking) if you want the most immediately useful auto-defense feature. It requires no new packages and can use data from the Phase 4 live connections we already have.
+**Start with Phase 6** (IP blocking) for the most immediate useful defense.
+**Phase 5b** (Snort signatures) gives the biggest coverage jump once packets are flowing.
 
 ---
 
@@ -489,12 +744,14 @@ Start with Phase 6 (IP Blocking) if you want the most immediately useful auto-de
 | Phase | Name | Status |
 |---|---|---|
 | 1 | Core Detection Engine | ✅ Complete |
-| 2 | AI/ML Detectors (Network + Log + Vuln + Phishing) | ✅ Complete |
+| 2 | AI/ML Detectors | ✅ Complete |
 | 3 | REST API + iPhone App | ✅ Complete |
-| 4 | Real Data Sources (live connections, Gmail, system logs) | ✅ Complete |
-| 5 | Live Packet Capture (scapy) | 🔜 Not started |
-| 6 | Auto-Defense / IP Blocking Engine | 🔜 Not started |
-| 7 | Process Monitor & Kill Engine | 🔜 Not started |
-| 8 | File Scanner & Download Monitor | 🔜 Not started |
-| 9 | Auto-Response Rules Engine | 🔜 Not started |
-| 10 | Threat Intelligence Feed | 🔜 Future |
+| 4 | Real Data Sources | ✅ Complete |
+| 5 | Live Packet Capture + Signatures + DNS + TLS + ARP | 🔜 Not started |
+| 6 | Auto IP Blocking + VirusTotal | 🔜 Not started |
+| 7 | Process + Persistence + USB Monitor | 🔜 Not started |
+| 8 | File Scanner + Script Analyzer + FIM | 🔜 Not started |
+| 9 | Auto-Response Rules Engine + iOS Push | 🔜 Not started |
+| 10 | Threat Intelligence Feeds | 🔜 Not started |
+| 11 | Wi-Fi & LAN Security | 🔜 Not started |
+| 12 | Browser & Extension Security | 🔜 Not started |

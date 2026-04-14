@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CyberGuard AI — Architecture</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #080c18;
+    color: #e2e8f0;
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    padding: 40px 20px 60px;
+  }
+
+  /* ── Header ── */
+  .header { text-align: center; margin-bottom: 48px; }
+  .header h1 {
+    font-size: 2.5rem; font-weight: 700; letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #34d399 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .header p { margin-top: 8px; color: #475569; font-size: 0.95rem; letter-spacing: 0.3px; }
+  .badge-row { display: flex; justify-content: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .badge {
+    padding: 4px 14px; border-radius: 999px; font-size: 0.72rem;
+    font-weight: 600; letter-spacing: 0.4px;
+  }
+  .bg  { background: rgba(52,211,153,0.15);  color: #34d399; border: 1px solid rgba(52,211,153,0.3); }
+  .bb  { background: rgba(96,165,250,0.15);  color: #60a5fa; border: 1px solid rgba(96,165,250,0.3); }
+  .bp  { background: rgba(167,139,250,0.15); color: #a78bfa; border: 1px solid rgba(167,139,250,0.3); }
+  .br  { background: rgba(239,68,68,0.15);   color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+
+  /* ── Main layout ── */
+  .arch { max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+
+  /* ── Layer ── */
+  .layer { border-radius: 18px; padding: 20px 22px; border: 1px solid transparent; }
+  .layer-label {
+    font-size: 0.62rem; font-weight: 700; letter-spacing: 2.5px;
+    text-transform: uppercase; margin-bottom: 14px; opacity: 0.65;
+  }
+
+  .L1 { background: rgba(96,165,250,0.05);  border-color: rgba(96,165,250,0.18); }
+  .L2 { background: rgba(167,139,250,0.05); border-color: rgba(167,139,250,0.18); }
+  .L3 { background: rgba(52,211,153,0.05);  border-color: rgba(52,211,153,0.18); }
+  .L4 { background: rgba(251,191,36,0.05);  border-color: rgba(251,191,36,0.18); }
+  .L5 { background: rgba(239,68,68,0.05);   border-color: rgba(239,68,68,0.18); }
+  .L6 { background: rgba(251,146,60,0.05);  border-color: rgba(251,146,60,0.18); }
+  .L7 { background: rgba(20,184,166,0.05);  border-color: rgba(20,184,166,0.18); }
+
+  .L1 .layer-label { color: #60a5fa; }
+  .L2 .layer-label { color: #a78bfa; }
+  .L3 .layer-label { color: #34d399; }
+  .L4 .layer-label { color: #fbbf24; }
+  .L5 .layer-label { color: #f87171; }
+  .L6 .layer-label { color: #fb923c; }
+  .L7 .layer-label { color: #2dd4bf; }
+
+  /* ── Card grid ── */
+  .grid { display: flex; gap: 10px; flex-wrap: wrap; }
+  .card {
+    flex: 1; min-width: 140px; border-radius: 12px;
+    padding: 13px 15px; border: 1px solid rgba(255,255,255,0.05);
+    position: relative; transition: transform 0.15s, box-shadow 0.15s;
+    cursor: default;
+  }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+
+  .c-blue   { background: rgba(96,165,250,0.09);  border-color: rgba(96,165,250,0.22); }
+  .c-purple { background: rgba(167,139,250,0.09); border-color: rgba(167,139,250,0.22); }
+  .c-green  { background: rgba(52,211,153,0.09);  border-color: rgba(52,211,153,0.22); }
+  .c-yellow { background: rgba(251,191,36,0.09);  border-color: rgba(251,191,36,0.22); }
+  .c-red    { background: rgba(239,68,68,0.09);   border-color: rgba(239,68,68,0.22); }
+  .c-orange { background: rgba(251,146,60,0.09);  border-color: rgba(251,146,60,0.22); }
+  .c-teal   { background: rgba(20,184,166,0.09);  border-color: rgba(20,184,166,0.22); }
+  .c-dim    { background: rgba(100,116,139,0.07); border-color: rgba(100,116,139,0.18); }
+
+  .ct { font-size: 0.78rem; font-weight: 700; margin-bottom: 6px; }
+  .c-blue   .ct { color: #93c5fd; }
+  .c-purple .ct { color: #c4b5fd; }
+  .c-green  .ct { color: #6ee7b7; }
+  .c-yellow .ct { color: #fde68a; }
+  .c-red    .ct { color: #fca5a5; }
+  .c-orange .ct { color: #fed7aa; }
+  .c-teal   .ct { color: #99f6e4; }
+  .c-dim    .ct { color: #94a3b8; }
+
+  .cd { font-size: 0.68rem; color: #475569; line-height: 1.55; }
+  .cd li { list-style: none; padding: 1px 0; }
+  .cd li::before { content: "· "; opacity: 0.45; }
+
+  .pill {
+    position: absolute; top: 9px; right: 9px;
+    font-size: 0.57rem; font-weight: 700;
+    padding: 2px 7px; border-radius: 999px; letter-spacing: 0.4px;
+  }
+  .p-done   { background: rgba(52,211,153,0.18); color: #34d399; }
+  .p-next   { background: rgba(251,191,36,0.18); color: #fbbf24; }
+  .p-future { background: rgba(100,116,139,0.18); color: #64748b; }
+
+  /* ── Arrow between layers ── */
+  .arrow {
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; padding: 2px 0;
+  }
+  .aline {
+    flex: 1; max-width: 180px; height: 1px;
+    background: linear-gradient(to right, transparent, #1e293b, transparent);
+  }
+  .alabel { font-size: 0.62rem; color: #1e293b; letter-spacing: 0.8px; }
+
+  /* ── Tech tags ── */
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .tag {
+    font-size: 0.62rem; padding: 2px 9px; border-radius: 5px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+    color: #475569; font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
+  /* ── Attack coverage table ── */
+  .coverage {
+    max-width: 1160px; margin: 0 auto 24px;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px; padding: 20px 22px;
+  }
+  .cov-title {
+    font-size: 0.62rem; font-weight: 700; letter-spacing: 2.5px;
+    text-transform: uppercase; color: #475569; margin-bottom: 14px;
+  }
+  .cov-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 6px;
+  }
+  .cov-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.7rem; padding: 7px 11px;
+    background: rgba(255,255,255,0.02); border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .cov-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .cd-done   { background: #34d399; box-shadow: 0 0 6px rgba(52,211,153,0.6); }
+  .cd-next   { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,0.5); }
+  .cd-future { background: #475569; }
+  .cov-name  { color: #94a3b8; flex: 1; }
+  .cov-phase { font-size: 0.6rem; color: #334155; margin-left: auto; font-family: monospace; }
+
+  /* ── Rules example ── */
+  .rules-box {
+    margin-top: 14px; padding: 14px 16px;
+    background: rgba(239,68,68,0.05); border: 1px solid rgba(239,68,68,0.12);
+    border-radius: 11px;
+  }
+  .rules-title {
+    font-size: 0.62rem; font-weight: 700; letter-spacing: 1.5px;
+    color: #f87171; margin-bottom: 10px; text-transform: uppercase;
+  }
+  .rules-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+  .rule-chip {
+    flex: 1; min-width: 185px; padding: 10px 13px;
+    background: rgba(0,0,0,0.25); border-radius: 9px;
+    font-size: 0.67rem; line-height: 1.75;
+    font-family: 'SF Mono', 'Fira Code', monospace; color: #64748b;
+  }
+  .rule-if   { color: #f87171; }
+  .rule-then { color: #34d399; }
+
+  /* ── Phase progress ── */
+  .progress { max-width: 1160px; margin: 14px auto 0; }
+  .prog-title {
+    font-size: 0.62rem; font-weight: 700; letter-spacing: 2.5px;
+    text-transform: uppercase; color: #334155; margin-bottom: 12px;
+  }
+  .phases { display: flex; gap: 7px; flex-wrap: wrap; }
+  .phase {
+    padding: 7px 14px; border-radius: 9px; font-size: 0.7rem;
+    font-weight: 600; border: 1px solid transparent;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .ph-done   { background: rgba(52,211,153,0.1);  border-color: rgba(52,211,153,0.25); color: #34d399; }
+  .ph-next   { background: rgba(96,165,250,0.1);  border-color: rgba(96,165,250,0.25); color: #60a5fa; }
+  .ph-future { background: rgba(100,116,139,0.07); border-color: rgba(100,116,139,0.18); color: #475569; }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex; justify-content: center; gap: 22px;
+    flex-wrap: wrap; margin-top: 20px;
+  }
+  .li { display: flex; align-items: center; gap: 7px; font-size: 0.7rem; color: #475569; }
+  .ld { width: 10px; height: 10px; border-radius: 3px; }
+
+  /* footer */
+  .footer { text-align: center; margin-top: 44px; color: #1e293b; font-size: 0.68rem; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <h1>🛡️ CyberGuard AI</h1>
+  <p>Personal AI-Powered Intrusion Prevention System — Maximum Coverage Build</p>
+  <div class="badge-row">
+    <span class="badge bg">4 Phases Complete</span>
+    <span class="badge bb">8 Phases Building</span>
+    <span class="badge bp">IDS → IPS</span>
+    <span class="badge br">30+ Attack Types</span>
+  </div>
+</div>
+
+<!-- ATTACK COVERAGE -->
+<div class="coverage">
+  <div class="cov-title">Attack Coverage</div>
+  <div class="cov-grid">
+    <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">DDoS / Traffic Flood</span><span class="cov-phase">P2a</span></div>
+    <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">Port Scanning</span><span class="cov-phase">P2a</span></div>
+    <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">Data Exfiltration</span><span class="cov-phase">P2a</span></div>
+    <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">C2 Beacon (malware)</span><span class="cov-phase">P2a</span></div>
+    <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">Brute Force Login</span><span class="cov-phase">P2b</span></div>
+    <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">Privilege Escalation</span><span class="cov-phase">P2b</span></div>
+    <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">Web Scanning / 404 Flood</span><span class="cov-phase">P2b</span></div>
+    <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">Phishing Emails</span><span class="cov-phase">P2d</span></div>
+    <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">Open Vulnerable Ports</span><span class="cov-phase">P2c</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Known Attack Signatures (50k+)</span><span class="cov-phase">P5b</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">DNS Tunneling</span><span class="cov-phase">P5c</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Malware C2 Domains</span><span class="cov-phase">P5c</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">DGA / Botnet Domains</span><span class="cov-phase">P5c</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">HTTPS C2 (JA3 fingerprint)</span><span class="cov-phase">P5d</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">ARP Spoofing / MITM</span><span class="cov-phase">P5e</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">SYN Flood</span><span class="cov-phase">P5</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Crypto Miner</span><span class="cov-phase">P7a</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Reverse Shell</span><span class="cov-phase">P7a</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Persistence (LaunchAgent)</span><span class="cov-phase">P7b</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">/etc/hosts Tampering</span><span class="cov-phase">P7b</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">SSH Backdoor Key</span><span class="cov-phase">P7b</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Hidden Admin Account</span><span class="cov-phase">P7b</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Malicious USB / BadUSB</span><span class="cov-phase">P7c</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Malware Download (hash)</span><span class="cov-phase">P8a</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Obfuscated Script / Payload</span><span class="cov-phase">P8b</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">System File Tampering (FIM)</span><span class="cov-phase">P8c</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Known Bad IP (AbuseIPDB)</span><span class="cov-phase">P10</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Rogue Wi-Fi / Evil Twin</span><span class="cov-phase">P11</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">ARP Poisoning on LAN</span><span class="cov-phase">P11</span></div>
+    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Malicious Browser Extension</span><span class="cov-phase">P12</span></div>
+  </div>
+</div>
+
+<div class="arch">
+
+  <!-- LAYER 1: iPhone App -->
+  <div class="layer L1">
+    <div class="layer-label">📱 Layer 1 — iPhone App (React Native + Expo)</div>
+    <div class="grid">
+      <div class="card c-blue"><span class="pill p-done">✅ Done</span>
+        <div class="ct">Dashboard</div>
+        <ul class="cd"><li>Live threat feed</li><li>Severity counts</li><li>System health</li></ul>
+      </div>
+      <div class="card c-blue"><span class="pill p-done">✅ Done</span>
+        <div class="ct">Alerts</div>
+        <ul class="cd"><li>Filter by severity</li><li>Real-time stream</li></ul>
+      </div>
+      <div class="card c-blue"><span class="pill p-done">✅ Done</span>
+        <div class="ct">Network Monitor</div>
+        <ul class="cd"><li>Live connections (5s)</li><li>Risk colour codes</li><li>CPU/memory/disk</li></ul>
+      </div>
+      <div class="card c-blue"><span class="pill p-done">✅ Done</span>
+        <div class="ct">Scanner</div>
+        <ul class="cd"><li>Gmail phishing scan</li><li>System log viewer</li><li>Port vuln scan</li></ul>
+      </div>
+      <div class="card c-red"><span class="pill p-next">🔜 P6</span>
+        <div class="ct">Defense Screen</div>
+        <ul class="cd"><li>Active blocklist</li><li>Countdown timers</li><li>Manual block/unblock</li><li>VT check button</li></ul>
+      </div>
+      <div class="card c-red"><span class="pill p-next">🔜 P7</span>
+        <div class="ct">Processes + USB</div>
+        <ul class="cd"><li>Suspicious processes</li><li>Swipe-to-kill</li><li>USB device alerts</li></ul>
+      </div>
+      <div class="card c-red"><span class="pill p-next">🔜 P9</span>
+        <div class="ct">Rules + Push</div>
+        <ul class="cd"><li>Toggle rules on/off</li><li>iOS push notifications</li><li>Rule history log</li></ul>
+      </div>
+    </div>
+    <div class="tags">
+      <span class="tag">React Native</span><span class="tag">Expo Go</span>
+      <span class="tag">AsyncStorage</span><span class="tag">WebSocket auto-reconnect</span>
+      <span class="tag">Expo Push API (P9)</span>
+    </div>
+  </div>
+
+  <div class="arrow"><div class="aline"></div>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1e3a5f" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+    <span class="alabel">REST API + WebSocket</span>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1e3a5f" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+    <div class="aline"></div>
+  </div>
+
+  <!-- LAYER 2: API Backend -->
+  <div class="layer L2">
+    <div class="layer-label">⚡ Layer 2 — FastAPI Backend (Python 3.11)</div>
+    <div class="grid">
+      <div class="card c-purple"><span class="pill p-done">✅ Done</span>
+        <div class="ct">REST API</div>
+        <ul class="cd"><li>JWT authentication</li><li>/network/* /gmail/*</li><li>/scan/* /events</li></ul>
+      </div>
+      <div class="card c-purple"><span class="pill p-done">✅ Done</span>
+        <div class="ct">WebSocket /ws</div>
+        <ul class="cd"><li>Real-time alerts</li><li>Push to all clients</li></ul>
+      </div>
+      <div class="card c-purple"><span class="pill p-done">✅ Done</span>
+        <div class="ct">Gmail OAuth2</div>
+        <ul class="cd"><li>PKCE flow</li><li>Token stored locally</li><li>Inbox parse + scan</li></ul>
+      </div>
+      <div class="card c-purple"><span class="pill p-done">✅ Done</span>
+        <div class="ct">Core Engine</div>
+        <ul class="cd"><li>Async pipeline</li><li>Event bus pub/sub</li><li>Alert dedup</li></ul>
+      </div>
+      <div class="card c-red"><span class="pill p-next">🔜 P6</span>
+        <div class="ct">Defense API</div>
+        <ul class="cd"><li>/defense/blocklist</li><li>/defense/rules</li><li>/intelligence/check</li></ul>
+      </div>
+      <div class="card c-red"><span class="pill p-next">🔜 P9</span>
+        <div class="ct">Rules Engine</div>
+        <ul class="cd"><li>YAML rules hot-reload</li><li>Action dispatcher</li><li>Cooldown tracking</li></ul>
+      </div>
+    </div>
+    <div class="tags">
+      <span class="tag">FastAPI</span><span class="tag">Uvicorn</span>
+      <span class="tag">python-jose JWT</span><span class="tag">structlog</span>
+      <span class="tag">aiosqlite (P6)</span>
+    </div>
+  </div>
+
+  <div class="arrow"><div class="aline"></div>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#14532d" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+    <span class="alabel">detection results</span>
+    <div class="aline"></div>
+  </div>
+
+  <!-- LAYER 3: Detectors -->
+  <div class="layer L3">
+    <div class="layer-label">🤖 Layer 3 — AI Detectors</div>
+    <div class="grid">
+      <div class="card c-green"><span class="pill p-done">✅ Done</span>
+        <div class="ct">🌐 Network Anomaly</div>
+        <ul class="cd"><li>Isolation Forest ML</li><li>DDoS · port scan</li><li>Exfiltration · C2</li></ul>
+      </div>
+      <div class="card c-green"><span class="pill p-done">✅ Done</span>
+        <div class="ct">📋 Log Analyzer</div>
+        <ul class="cd"><li>Brute force login</li><li>Privilege escalation</li><li>Web scanning</li></ul>
+      </div>
+      <div class="card c-green"><span class="pill p-done">✅ Done</span>
+        <div class="ct">🔍 Vuln Scanner</div>
+        <ul class="cd"><li>40+ risky ports</li><li>Banner grabbing</li><li>CVE references</li></ul>
+      </div>
+      <div class="card c-green"><span class="pill p-done">✅ Done</span>
+        <div class="ct">📧 Phishing Detect</div>
+        <ul class="cd"><li>15+ signals</li><li>Trusted sender list</li><li>Brand-label match</li></ul>
+      </div>
+      <div class="card c-orange"><span class="pill p-next">🔜 P5b</span>
+        <div class="ct">📜 Snort Signatures</div>
+        <ul class="cd"><li>50k+ known attacks</li><li>Community rules</li><li>EternalBlue · Log4Shell</li><li>Daily rule updates</li></ul>
+      </div>
+      <div class="card c-orange"><span class="pill p-next">🔜 P5c</span>
+        <div class="ct">🌍 DNS Monitor</div>
+        <ul class="cd"><li>Malware domains</li><li>DGA detection</li><li>DNS tunneling</li><li>DNS sinkholing</li></ul>
+      </div>
+      <div class="card c-orange"><span class="pill p-next">🔜 P5d</span>
+        <div class="ct">🔐 TLS / JA3</div>
+        <ul class="cd"><li>JA3 fingerprinting</li><li>Catches HTTPS C2</li><li>Cobalt Strike · RATs</li><li>Bad cert detection</li></ul>
+      </div>
+      <div class="card c-orange"><span class="pill p-next">🔜 P5e</span>
+        <div class="ct">🔗 ARP / MITM</div>
+        <ul class="cd"><li>ARP spoofing detect</li><li>Gateway MAC change</li><li>Gratuitous ARP flood</li></ul>
+      </div>
+      <div class="card c-orange"><span class="pill p-next">🔜 P7a</span>
+        <div class="ct">⚙️ Process Monitor</div>
+        <ul class="cd"><li>Crypto miners (CPU)</li><li>Reverse shells</li><li>Unsigned binaries</li><li>Suspicious parents</li></ul>
+      </div>
+      <div class="card c-orange"><span class="pill p-next">🔜 P7b</span>
+        <div class="ct">🔒 Persistence Monitor</div>
+        <ul class="cd"><li>LaunchAgents/Daemons</li><li>/etc/hosts changes</li><li>authorized_keys</li><li>Cron · shell configs</li></ul>
+      </div>
+      <div class="card c-orange"><span class="pill p-next">🔜 P7c</span>
+        <div class="ct">🔌 USB Monitor</div>
+        <ul class="cd"><li>New device alerts</li><li>BadUSB / HID risk</li><li>Trusted device list</li></ul>
+      </div>
+      <div class="card c-orange"><span class="pill p-next">🔜 P8</span>
+        <div class="ct">📁 File Scanner</div>
+        <ul class="cd"><li>Hash vs MalwareBazaar</li><li>Downloads watcher</li><li>Obfuscated scripts</li><li>FIM system files</li></ul>
+      </div>
+      <div class="card c-teal"><span class="pill p-future">🔮 P11</span>
+        <div class="ct">📶 Wi-Fi Monitor</div>
+        <ul class="cd"><li>Evil twin AP detect</li><li>Rogue DHCP</li><li>LAN device scan</li></ul>
+      </div>
+      <div class="card c-teal"><span class="pill p-future">🔮 P12</span>
+        <div class="ct">🌐 Browser Security</div>
+        <ul class="cd"><li>Extension scanning</li><li>Dangerous perms</li><li>Credential harvest</li></ul>
+      </div>
+    </div>
+    <div class="tags">
+      <span class="tag">scikit-learn</span><span class="tag">Isolation Forest</span>
+      <span class="tag">scapy (P5)</span><span class="tag">Snort rules (P5b)</span>
+      <span class="tag">JA3 fingerprinting (P5d)</span><span class="tag">psutil</span>
+      <span class="tag">watchdog (P8)</span>
+    </div>
+  </div>
+
+  <div class="arrow"><div class="aline"></div>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#713f12" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+    <span class="alabel">live system data</span>
+    <div class="aline"></div>
+  </div>
+
+  <!-- LAYER 4: Data Sources -->
+  <div class="layer L4">
+    <div class="layer-label">📡 Layer 4 — Real Data Sources (No Fake Data)</div>
+    <div class="grid">
+      <div class="card c-yellow"><span class="pill p-done">✅ Done</span>
+        <div class="ct">netstat</div>
+        <ul class="cd"><li>Live TCP connections</li><li>No root needed</li><li>Risk annotated</li></ul>
+      </div>
+      <div class="card c-yellow"><span class="pill p-done">✅ Done</span>
+        <div class="ct">psutil</div>
+        <ul class="cd"><li>CPU / memory / disk</li><li>Network I/O</li><li>Process list</li></ul>
+      </div>
+      <div class="card c-yellow"><span class="pill p-done">✅ Done</span>
+        <div class="ct">macOS log show</div>
+        <ul class="cd"><li>Real system logs</li><li>Auth / network / sec</li><li>Last N hours</li></ul>
+      </div>
+      <div class="card c-yellow"><span class="pill p-done">✅ Done</span>
+        <div class="ct">Gmail API</div>
+        <ul class="cd"><li>Real inbox emails</li><li>OAuth2 + PKCE</li><li>MIME body parsing</li></ul>
+      </div>
+      <div class="card c-orange"><span class="pill p-next">🔜 P5a</span>
+        <div class="ct">scapy (Packets)</div>
+        <ul class="cd"><li>Raw packet capture</li><li>All protocols</li><li>Flow aggregation</li></ul>
+      </div>
+      <div class="card c-orange"><span class="pill p-next">🔜 P5c</span>
+        <div class="ct">DNS Queries</div>
+        <ul class="cd"><li>UDP port 53 sniff</li><li>Every domain lookup</li><li>Real-time block</li></ul>
+      </div>
+      <div class="card c-orange"><span class="pill p-next">🔜 P6b</span>
+        <div class="ct">VirusTotal API</div>
+        <ul class="cd"><li>IPs + domains + files</li><li>70+ AV engines</li><li>Local 24h cache</li></ul>
+      </div>
+      <div class="card c-teal"><span class="pill p-future">🔮 P10</span>
+        <div class="ct">Threat Intel Feeds</div>
+        <ul class="cd"><li>AbuseIPDB</li><li>Spamhaus · Feodo</li><li>MalwareBazaar</li><li>URLhaus · CINS</li></ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow"><div class="aline"></div>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7f1d1d" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+    <span class="alabel">detection triggers auto-response</span>
+    <div class="aline"></div>
+  </div>
+
+  <!-- LAYER 5: Auto-Defense -->
+  <div class="layer L5">
+    <div class="layer-label">🛡️ Layer 5 — Auto-Defense Engine (IPS) — Phases 6–9</div>
+    <div class="grid">
+      <div class="card c-red"><span class="pill p-next">🔜 P6</span>
+        <div class="ct">🔒 IP Blocker</div>
+        <ul class="cd"><li>macOS pfctl firewall</li><li>Auto-block on detect</li><li>Timed expiry</li><li>Audit log SQLite</li></ul>
+      </div>
+      <div class="card c-red"><span class="pill p-next">🔜 P5c</span>
+        <div class="ct">🌍 DNS Sinkhole</div>
+        <ul class="cd"><li>Malware domain → 127.0.0.1</li><li>/etc/hosts injection</li><li>Auto-restored on unblock</li></ul>
+      </div>
+      <div class="card c-red"><span class="pill p-next">🔜 P7</span>
+        <div class="ct">💀 Process Killer</div>
+        <ul class="cd"><li>Kill by PID</li><li>SIGKILL fallback</li><li>Auto or confirm mode</li></ul>
+      </div>
+      <div class="card c-red"><span class="pill p-next">🔜 P8</span>
+        <div class="ct">🗂️ File Quarantine</div>
+        <ul class="cd"><li>Move to safe folder</li><li>Strip execute perms</li><li>Restore if false pos</li></ul>
+      </div>
+      <div class="card c-red"><span class="pill p-next">🔜 P9 ⭐</span>
+        <div class="ct">🧠 Rules Engine</div>
+        <ul class="cd"><li>YAML config rules</li><li>IF threat → THEN action</li><li>Hot-reload no restart</li><li>Cooldown tracking</li></ul>
+      </div>
+      <div class="card c-red"><span class="pill p-next">🔜 P9</span>
+        <div class="ct">🔔 iOS Push</div>
+        <ul class="cd"><li>Expo Push API</li><li>Instant alerts</li><li>Threat categories</li></ul>
+      </div>
+    </div>
+
+    <!-- Rules examples -->
+    <div class="rules-box">
+      <div class="rules-title">Auto-Response Rules (Phase 9 — YAML Config)</div>
+      <div class="rules-grid">
+        <div class="rule-chip">
+          <span class="rule-if">IF</span> brute_force + severity=high<br>
+          <span class="rule-then">THEN</span> block_ip(2h)<br>
+          <span class="rule-then">    +</span> push_notification
+        </div>
+        <div class="rule-chip">
+          <span class="rule-if">IF</span> crypto_miner detected<br>
+          <span class="rule-then">THEN</span> kill_process<br>
+          <span class="rule-then">    +</span> block_ip(24h)
+        </div>
+        <div class="rule-chip">
+          <span class="rule-if">IF</span> malware_file downloaded<br>
+          <span class="rule-then">THEN</span> quarantine_file<br>
+          <span class="rule-then">    +</span> push_notification
+        </div>
+        <div class="rule-chip">
+          <span class="rule-if">IF</span> snort_signature match<br>
+          <span class="rule-then">THEN</span> block_ip(1h)<br>
+          <span class="rule-then">    +</span> push_notification
+        </div>
+        <div class="rule-chip">
+          <span class="rule-if">IF</span> dns_malware_domain<br>
+          <span class="rule-then">THEN</span> block_domain<br>
+          <span class="rule-then">    +</span> push_notification
+        </div>
+        <div class="rule-chip">
+          <span class="rule-if">IF</span> persistence_change<br>
+          <span class="rule-then">THEN</span> push_notification<br>
+          <span class="rule-then">    +</span> log_event
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow"><div class="aline"></div>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#134e4a" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+    <span class="alabel">proactive intelligence</span>
+    <div class="aline"></div>
+  </div>
+
+  <!-- LAYER 6: Threat Intel -->
+  <div class="layer L6">
+    <div class="layer-label">🔭 Layer 6 — Threat Intelligence + Extended Detection</div>
+    <div class="grid">
+      <div class="card c-orange"><span class="pill p-future">🔮 P10</span>
+        <div class="ct">AbuseIPDB</div>
+        <ul class="cd"><li>Reported bad IPs</li><li>1k/day free</li><li>Local cached</li></ul>
+      </div>
+      <div class="card c-orange"><span class="pill p-future">🔮 P10</span>
+        <div class="ct">Spamhaus DROP</div>
+        <ul class="cd"><li>Botnet IPs</li><li>No API key needed</li><li>Daily update</li></ul>
+      </div>
+      <div class="card c-orange"><span class="pill p-future">🔮 P10</span>
+        <div class="ct">Feodo Tracker</div>
+        <ul class="cd"><li>Botnet C2 IPs</li><li>Emotet · TrickBot</li><li>Free feed</li></ul>
+      </div>
+      <div class="card c-orange"><span class="pill p-future">🔮 P10</span>
+        <div class="ct">MalwareBazaar</div>
+        <ul class="cd"><li>Malware file hashes</li><li>No API key needed</li><li>500k+ samples</li></ul>
+      </div>
+      <div class="card c-teal"><span class="pill p-future">🔮 P11</span>
+        <div class="ct">📶 Wi-Fi Security</div>
+        <ul class="cd"><li>Evil twin detection</li><li>Rogue AP / DHCP</li><li>LAN device scan</li><li>Deauth flood detect</li></ul>
+      </div>
+      <div class="card c-teal"><span class="pill p-future">🔮 P12</span>
+        <div class="ct">🌐 Browser Security</div>
+        <ul class="cd"><li>Extension scanner</li><li>Dangerous permissions</li><li>Chrome · Firefox · Edge</li><li>Credential harvest detect</li></ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- PHASE PROGRESS -->
+<div class="progress">
+  <div class="prog-title">Build Progress — 12 Phases</div>
+  <div class="phases">
+    <span class="phase ph-done">✅ P1 Core Engine</span>
+    <span class="phase ph-done">✅ P2 AI Detectors</span>
+    <span class="phase ph-done">✅ P3 API + iPhone</span>
+    <span class="phase ph-done">✅ P4 Real Data</span>
+    <span class="phase ph-next">🔜 P5 Packets + Signatures + DNS + TLS + ARP</span>
+    <span class="phase ph-next">🔜 P6 Auto IP Block + VirusTotal ⭐</span>
+    <span class="phase ph-next">🔜 P7 Process + Persistence + USB</span>
+    <span class="phase ph-next">🔜 P8 File Scanner + FIM</span>
+    <span class="phase ph-next">🔜 P9 Rules Engine + iOS Push ⭐</span>
+    <span class="phase ph-future">🔮 P10 Threat Intel Feeds</span>
+    <span class="phase ph-future">🔮 P11 Wi-Fi Security</span>
+    <span class="phase ph-future">🔮 P12 Browser Security</span>
+  </div>
+</div>
+
+<!-- LEGEND -->
+<div class="legend">
+  <div class="li"><div class="ld" style="background:#34d399;"></div>Complete</div>
+  <div class="li"><div class="ld" style="background:#fbbf24;"></div>Building next</div>
+  <div class="li"><div class="ld" style="background:#f87171;"></div>Auto-defense / IPS layer</div>
+  <div class="li"><div class="ld" style="background:#2dd4bf;"></div>Future phases</div>
+  <div class="li" style="color:#334155;">⭐ highest priority</div>
+</div>
+
+<div class="footer">github.com/virenvaghasiya/cyberguard-ai &nbsp;·&nbsp; CyberGuard AI &nbsp;·&nbsp; Maximum Coverage Build</div>
+
+</body>
+</html>
