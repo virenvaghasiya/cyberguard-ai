@@ -237,9 +237,9 @@
     <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">SSH Backdoor Key</span><span class="cov-phase">P7b</span></div>
     <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">Hidden Admin Account</span><span class="cov-phase">P7b</span></div>
     <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">Malicious USB / BadUSB</span><span class="cov-phase">P7c</span></div>
-    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Malware Download (hash)</span><span class="cov-phase">P8a</span></div>
-    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Obfuscated Script / Payload</span><span class="cov-phase">P8b</span></div>
-    <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">System File Tampering (FIM)</span><span class="cov-phase">P8c</span></div>
+    <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">Malware Download (hash)</span><span class="cov-phase">P8a</span></div>
+    <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">Obfuscated Script / Payload</span><span class="cov-phase">P8b</span></div>
+    <div class="cov-item"><div class="cov-dot cd-done"></div><span class="cov-name">System File Tampering (FIM)</span><span class="cov-phase">P8c</span></div>
     <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Known Bad IP (AbuseIPDB)</span><span class="cov-phase">P10</span></div>
     <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">Rogue Wi-Fi / Evil Twin</span><span class="cov-phase">P11</span></div>
     <div class="cov-item"><div class="cov-dot cd-next"></div><span class="cov-name">ARP Poisoning on LAN</span><span class="cov-phase">P11</span></div>
@@ -386,9 +386,9 @@
         <div class="ct">🔌 USB Monitor</div>
         <ul class="cd"><li>New device alerts</li><li>BadUSB / HID risk</li><li>Trusted device list</li></ul>
       </div>
-      <div class="card c-orange"><span class="pill p-next">🔜 P8</span>
+      <div class="card c-orange"><span class="pill p-done">✅ Done</span>
         <div class="ct">📁 File Scanner</div>
-        <ul class="cd"><li>Hash vs MalwareBazaar</li><li>Downloads watcher</li><li>Obfuscated scripts</li><li>FIM system files</li></ul>
+        <ul class="cd"><li>SHA-256 hash DB lookup</li><li>VirusTotal (optional)</li><li>Script static analysis</li><li>FIM: Downloads / tmp / .ssh</li></ul>
       </div>
       <div class="card c-teal"><span class="pill p-future">🔮 P11</span>
         <div class="ct">📶 Wi-Fi Monitor</div>
@@ -577,7 +577,7 @@
     <span class="phase ph-done">✅ P5b Attack Signatures (200+)</span>
     <span class="phase ph-next">✅ Done Auto IP Block + VirusTotal ⭐</span>
     <span class="phase ph-done">✅ P7 Process + Persistence + USB</span>
-    <span class="phase ph-next">🔜 P8 File Scanner + FIM</span>
+    <span class="phase ph-done">✅ P8 File Scanner + FIM</span>
     <span class="phase ph-next">🔜 P9 Rules Engine + iOS Push ⭐</span>
     <span class="phase ph-future">🔮 P10 Threat Intel Feeds</span>
     <span class="phase ph-future">🔮 P11 Wi-Fi Security</span>

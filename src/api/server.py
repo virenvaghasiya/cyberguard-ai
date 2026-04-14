@@ -48,6 +48,12 @@ Endpoints:
     Signature Detector (Phase 5b)
         POST /signatures/scan       — scan arbitrary text/payload for attack signatures
         GET  /signatures/info       — signature library stats (count, categories)
+    File Scanner / FIM (Phase 8)
+        POST /files/scan            — hash + script-analyze one or more files
+        GET  /files/fim/status      — FIM diff against stored baseline
+        POST /files/fim/baseline    — take a fresh FIM baseline snapshot
+        POST /files/fim/approve     — mark a FIM change as approved
+        GET  /files/hashdb          — malware hash DB stats
     WebSocket
         WS   /ws/alerts             — live alert stream
 """
@@ -80,6 +86,7 @@ from src.detectors.process_monitor import ProcessMonitor
 from src.detectors.persistence_monitor import PersistenceMonitor
 from src.detectors.usb_monitor import USBMonitor
 from src.detectors.signature_detector import SignatureDetector
+from src.detectors.file_scanner import FileScanner
 from src.defense import block_store, firewall
 
 # ---------------------------------------------------------------------------
@@ -116,6 +123,9 @@ async def lifespan(app: FastAPI):
     )
     pipeline.register_detector(
         SignatureDetector(config=pipeline.config, event_bus=pipeline.event_bus)
+    )
+    pipeline.register_detector(
+        FileScanner(config=pipeline.config, event_bus=pipeline.event_bus)
     )
 
     # Hook WebSocket broadcaster into every event type
@@ -828,6 +838,85 @@ async def signatures_info():
     return {
         "signature_count": detector.get_signature_count(),
         "categories": detector.get_categories(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# File Scanner / FIM endpoints (Phase 8)
+# ---------------------------------------------------------------------------
+
+class FileScanRequest(BaseModel):
+    paths: list[str] = []
+    dirs: list[str] = []
+
+
+class FIMApproveRequest(BaseModel):
+    path: str
+
+
+@app.post("/files/scan", tags=["File Scanner"])
+async def files_scan(req: FileScanRequest):
+    """
+    Hash-check and script-analyze specific files or all files in directories.
+    Returns findings for any file with risk != clean.
+    """
+    detector = pipeline.get_detector("file_scanner") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="File scanner not available")
+    data: dict = {}
+    if req.paths:
+        data["paths"] = req.paths
+    elif req.dirs:
+        data["dirs"] = req.dirs
+    else:
+        return {"count": 0, "findings": []}
+    findings = await detector.analyze(data)
+    return {"count": len(findings), "findings": findings}
+
+
+@app.get("/files/fim/status", tags=["File Scanner"])
+async def files_fim_status():
+    """Return FIM diff: files added, modified, or deleted since last baseline."""
+    detector = pipeline.get_detector("file_scanner") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="File scanner not available")
+    changes = await detector.analyze(None)  # FIM mode
+    return {
+        "changes_detected": len(changes),
+        "changes": changes,
+    }
+
+
+@app.post("/files/fim/baseline", tags=["File Scanner"])
+async def files_fim_baseline():
+    """Take a fresh FIM baseline snapshot of all watched directories."""
+    detector = pipeline.get_detector("file_scanner") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="File scanner not available")
+    return detector.take_fim_baseline()
+
+
+@app.post("/files/fim/approve", tags=["File Scanner"])
+async def files_fim_approve(req: FIMApproveRequest):
+    """Mark a FIM change as intentional — update baseline for that path only."""
+    detector = pipeline.get_detector("file_scanner") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="File scanner not available")
+    ok = detector.fim_approve(req.path)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Path not found in current snapshot")
+    return {"approved": True, "path": req.path}
+
+
+@app.get("/files/hashdb", tags=["File Scanner"])
+async def files_hashdb():
+    """Return malware hash database statistics."""
+    detector = pipeline.get_detector("file_scanner") if pipeline else None
+    if not detector:
+        raise HTTPException(status_code=503, detail="File scanner not available")
+    return {
+        "hash_count": detector.get_hash_db_size(),
+        "db_path": "data/malware_hashes.txt",
     }
 
 
