@@ -36,14 +36,20 @@ def _validate_ip(ip: str) -> str:
 
 
 async def _run(cmd: list[str]) -> tuple[int, str, str]:
-    """Run a shell command and return (returncode, stdout, stderr)."""
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
-    return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
+    """Run a shell command and return (returncode, stdout, stderr).
+    Returns (-1, '', 'unavailable') if the binary is not found (e.g. Linux)."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
+        return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
+    except FileNotFoundError:
+        return -1, "", "unavailable"
+    except asyncio.TimeoutError:
+        return -1, "", "timeout"
 
 
 async def is_pf_available() -> bool:
