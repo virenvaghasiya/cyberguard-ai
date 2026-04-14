@@ -23,6 +23,8 @@ env/
 .env
 config/local.yaml
 config/production.yaml
+config/gmail_credentials.json
+data/gmail_token.json
 
 # Data & models (keep samples, ignore large files)
 data/models/*.joblib
