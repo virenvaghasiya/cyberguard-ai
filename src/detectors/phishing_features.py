@@ -103,8 +103,10 @@ TRUSTED_SENDER_DOMAINS = {
     "microsoft.com", "outlook.com", "live.com", "hotmail.com",
     "office.com", "sharepoint.com", "teams.microsoft.com",
     # Amazon / AWS
-    "amazon.com", "aws.amazon.com", "ses.amazonaws.com",
-    "amazonses.com",
+    "amazon.com", "amazon.co.uk", "amazon.in", "amazon.de",
+    "amazon.ca", "amazon.com.au", "amazon.fr", "amazon.es",
+    "amazon.it", "amazon.co.jp", "aws.amazon.com",
+    "amazonses.com", "amazonaws.com",
     # Cloud & dev tools
     "heroku.com", "vercel.com", "netlify.com", "cloudflare.com",
     "digitalocean.com", "linode.com", "render.com",
@@ -114,6 +116,19 @@ TRUSTED_SENDER_DOMAINS = {
     "zoom.us", "calendly.com",
     # CI/CD
     "circleci.com", "travis-ci.com", "jenkins.io",
+}
+
+# Brand names that are trusted regardless of TLD.
+# Handles amazon.co.uk, amazon.in, apple.com.au etc.
+TRUSTED_BRANDS = {
+    "amazon", "github", "gitlab", "google", "apple", "microsoft",
+    "stripe", "slack", "notion", "atlassian", "digitalocean",
+    "cloudflare", "heroku", "vercel", "netlify", "twilio",
+    "sendgrid", "mailchimp", "hubspot", "salesforce", "zoom",
+    "dropbox", "adobe", "figma", "linear", "jira", "trello",
+    "shopify", "squarespace", "wix", "godaddy", "namecheap",
+    "linkedin", "twitter", "instagram", "facebook", "youtube",
+    "netflix", "spotify", "uber", "airbnb",
 }
 
 
@@ -464,16 +479,31 @@ def _get_domain(email_or_url: str) -> str:
 def _is_trusted_domain(domain: str) -> bool:
     """
     Return True if the domain is a known legitimate sender.
-    Matches exact domain or any subdomain (e.g. mail.github.com → github.com).
+
+    Matching strategy (in order):
+    1. Exact match:   amazon.com → trusted
+    2. Subdomain:     notifications.github.com → github.com → trusted
+    3. Brand + TLD:   amazon.co.uk, amazon.in → brand "amazon" → trusted
     """
     if not domain:
         return False
+
+    # 1. Exact match
     if domain in TRUSTED_SENDER_DOMAINS:
         return True
-    # Check if it's a subdomain of a trusted domain
+
+    # 2. Subdomain of a trusted domain (notifications.github.com → github.com)
     parts = domain.split(".")
     for i in range(1, len(parts)):
         parent = ".".join(parts[i:])
         if parent in TRUSTED_SENDER_DOMAINS:
             return True
+
+    # 3. Brand name match — handles amazon.co.uk, amazon.in, apple.com.au etc.
+    # Check each label in the domain (excluding single-letter / short ccTLDs)
+    labels = [p for p in parts if len(p) > 2]
+    for label in labels:
+        if label in TRUSTED_BRANDS:
+            return True
+
     return False
