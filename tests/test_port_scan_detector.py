@@ -75,7 +75,7 @@ async def test_ignores_normal_traffic(detector):
     results = await detector.analyze(normal)
     await detector.stop()
 
-    assert len(results) == 0, f"False positive: flagged normal traffic as scan"
+    assert len(results) == 0, "False positive: flagged normal traffic as scan"
 
 
 @pytest.mark.asyncio

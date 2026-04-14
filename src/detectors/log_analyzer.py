@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -158,7 +157,7 @@ class LogAnalyzer(BaseDetector):
         else:
             raw = str(data)
 
-        lines = [l for l in raw.splitlines() if l.strip()]
+        lines = [line for line in raw.splitlines() if line.strip()]
         if not lines:
             return []
 

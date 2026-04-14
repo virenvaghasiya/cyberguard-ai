@@ -15,12 +15,7 @@ See docs/gmail_setup.md for step-by-step instructions.
 
 from __future__ import annotations
 
-import json
-import base64
 import re
-from pathlib import Path
-from typing import Any
-from datetime import datetime, timezone
 
 import structlog
 

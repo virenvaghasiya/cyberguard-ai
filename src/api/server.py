@@ -41,7 +41,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 
-from src.api.auth import authenticate_user, create_access_token, require_auth
+from src.api.auth import authenticate_user, create_access_token
 from src.api.websocket import broadcast_event, ws_manager
 from src.core.events import EventType
 from src.core.pipeline import PipelineManager

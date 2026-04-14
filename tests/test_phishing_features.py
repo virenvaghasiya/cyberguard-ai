@@ -1,6 +1,5 @@
 """Tests for phishing email feature extraction."""
 
-import pytest
 from src.detectors.phishing_features import extract_email_features
 
 
