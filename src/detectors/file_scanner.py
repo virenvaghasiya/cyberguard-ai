@@ -22,12 +22,10 @@ Three detection engines in one module:
 from __future__ import annotations
 
 import asyncio
-import base64
 import hashlib
 import json
 import os
 import re
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any

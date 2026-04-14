@@ -29,7 +29,6 @@ Falls back to logging if APNs cert/key is not configured.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 from collections import deque

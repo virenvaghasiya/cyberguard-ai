@@ -42,7 +42,13 @@ google-auth-oauthlib>=1.2.0
 google-api-python-client>=2.120.0
 
 # System monitoring
-psutil>=5.9.0
+psutil>=6.0.0
+
+# HTTP client (VirusTotal, APNs push)
+aiohttp>=3.9.0
+
+# JWT for APNs push notifications
+PyJWT>=2.8.0
 
 # Utilities
 click>=8.1.0
