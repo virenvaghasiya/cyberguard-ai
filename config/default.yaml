@@ -59,12 +59,38 @@ api:
     - "http://localhost:3000"
   auth_enabled: false  # Enable for production
 
-# Future modules (placeholders)
 log_analyzer:
-  enabled: false
+  enabled: true
+  # Number of failed logins from one IP to trigger brute force alert
+  brute_force_threshold: 5
+  # Number of 4xx errors from one IP to trigger web scanning alert
+  web_scan_threshold: 20
+  # Sudo commands that always warrant a HIGH severity alert
+  sensitive_commands:
+    - passwd
+    - useradd
+    - userdel
+    - usermod
+    - visudo
+    - chmod
+    - chown
+    - rm -rf
+    - dd
+    - mkfs
+    - fdisk
+    - iptables
+    - ufw
+    - systemctl
+    - service
 
 vulnerability_scanner:
-  enabled: false
+  enabled: true
+  # Seconds to wait per port before declaring it closed
+  timeout: 1.0
+  # Max ports scanned in parallel per host
+  max_concurrent: 50
+  # Ports to check (defaults to all known risky ports if omitted)
+  # ports: [22, 23, 21, 3306, 5432, 6379, 27017, 9200, 2375, 3389, 5900]
 
 phishing_detector:
   enabled: false

@@ -142,8 +142,8 @@ class C2BeaconDetector(BaseDetector):
         sorted_group = group.sort_values("_ts")
         timestamps = sorted_group["_ts"].values
 
-        # Compute inter-arrival times in seconds
-        iats = np.diff(timestamps.astype("int64")) / 1e9  # nanoseconds to seconds
+        # Compute inter-arrival times in seconds (works across pandas datetime64 resolutions)
+        iats = np.diff(timestamps) / np.timedelta64(1, "s")
         iats = iats[iats > 0]  # Drop zero/negative gaps
 
         if len(iats) < 3:
