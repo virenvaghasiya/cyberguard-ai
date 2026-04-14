@@ -165,7 +165,6 @@ def _get_connections_via_psutil() -> dict:
                     laddr = f"{conn.laddr.ip}:{conn.laddr.port}" if conn.laddr else ""
                     raddr = f"{conn.raddr.ip}:{conn.raddr.port}" if conn.raddr else ""
                     remote_port = conn.raddr.port if conn.raddr else 0
-                    local_port  = conn.laddr.port if conn.laddr else 0
                     risk = "low"
                     risk_reason = None
                     if remote_port in KNOWN_MALWARE_PORTS:

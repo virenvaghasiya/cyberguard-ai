@@ -390,7 +390,7 @@ async def gmail_auth(request_host: str = "localhost"):
     """
     from fastapi.responses import RedirectResponse
     try:
-        redirect_uri = f"http://localhost:8000/gmail/callback"
+        redirect_uri = "http://localhost:8000/gmail/callback"
         auth_url = gmail_oauth.get_auth_url(redirect_uri)
         return RedirectResponse(url=auth_url)
     except FileNotFoundError as e:

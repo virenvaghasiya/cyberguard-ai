@@ -12,7 +12,6 @@ Token is stored locally (personal use only — never leaves your Mac).
 
 from __future__ import annotations
 
-import json
 import base64
 import re
 from pathlib import Path
@@ -25,6 +24,10 @@ TOKEN_PATH = Path("data/gmail_token.json")
 CREDS_PATH = Path("config/gmail_credentials.json")
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+
+# Keep the flow object alive between /gmail/auth and /gmail/callback
+# so the PKCE code_verifier is preserved.
+_pending_flow = None
 
 
 def _get_credentials():
@@ -59,7 +62,8 @@ def is_connected() -> bool:
 
 
 def get_auth_url(redirect_uri: str) -> str:
-    """Return the Google OAuth consent URL."""
+    """Return the Google OAuth consent URL and store the flow for the callback."""
+    global _pending_flow
     from google_auth_oauthlib.flow import Flow
 
     if not CREDS_PATH.exists():
@@ -78,18 +82,28 @@ def get_auth_url(redirect_uri: str) -> str:
         include_granted_scopes="true",
         prompt="consent",
     )
+    # Store so exchange_code can reuse the same flow (preserves code_verifier)
+    _pending_flow = flow
     return auth_url
 
 
 def exchange_code(code: str, redirect_uri: str) -> None:
     """Exchange authorization code for tokens and save them."""
+    global _pending_flow
     from google_auth_oauthlib.flow import Flow
 
-    flow = Flow.from_client_secrets_file(
-        str(CREDS_PATH),
-        scopes=SCOPES,
-        redirect_uri=redirect_uri,
-    )
+    if _pending_flow is not None:
+        # Reuse the existing flow — this preserves the PKCE code_verifier
+        flow = _pending_flow
+        _pending_flow = None
+    else:
+        # Fallback: create a fresh flow (works if PKCE is not required)
+        flow = Flow.from_client_secrets_file(
+            str(CREDS_PATH),
+            scopes=SCOPES,
+            redirect_uri=redirect_uri,
+        )
+
     flow.fetch_token(code=code)
     _save_token(flow.credentials)
     logger.info("gmail_connected", email=_get_user_email())
