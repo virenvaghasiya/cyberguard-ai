@@ -49,7 +49,7 @@ MALWARE_NAMES = {
 MALWARE_PORTS = {4444, 1337, 31337, 12345, 54321, 6666, 6667, 6668, 9999, 8888}
 
 # Paths that legitimate system binaries should NOT run from
-SUSPICIOUS_PATHS = {"/tmp/", "/var/tmp/", "/dev/shm/", "/."}
+SUSPICIOUS_PATHS = {"/tmp/", "/var/tmp/", "/dev/shm/", "/." }  # nosec B108
 
 
 # ── CPU spike tracker ─────────────────────────────────────────────────────────

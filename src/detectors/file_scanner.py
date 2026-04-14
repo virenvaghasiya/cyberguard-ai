@@ -47,7 +47,7 @@ HOME = Path.home()
 FIM_WATCH_DIRS: list[Path] = [
     HOME / "Downloads",
     HOME / "Desktop",
-    Path("/tmp"),
+    Path("/tmp"),  # nosec B108
     HOME / ".ssh",
 ]
 
