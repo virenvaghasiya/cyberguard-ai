@@ -137,3 +137,168 @@ export async function scanVulnerability(target, ports = null, timeout = 1.0) {
   const res = await c.post('/scan/vulnerability', body);
   return res.data;
 }
+
+// ---------------------------------------------------------------------------
+// Signature scanner (Phase 5b)
+// ---------------------------------------------------------------------------
+
+export async function scanSignature(text) {
+  const c = await client();
+  const res = await c.post('/signatures/scan', { text });
+  return res.data;
+}
+
+// ---------------------------------------------------------------------------
+// Process monitor (Phase 7a)
+// GET /processes/all       → all processes sorted by CPU
+// GET /processes/suspicious → deep scan, flagged processes only
+// POST /processes/kill/{pid}
+// ---------------------------------------------------------------------------
+
+export async function fetchProcesses() {
+  const c = await client();
+  const res = await c.get('/processes/all');
+  return res.data;  // { count, processes }
+}
+
+export async function analyzeProcesses() {
+  const c = await client();
+  const res = await c.get('/processes/suspicious');
+  return res.data;  // { count, critical, high, medium, findings }
+}
+
+export async function killProcess(pid) {
+  const c = await client();
+  const res = await c.post(`/processes/kill/${pid}`);
+  return res.data;
+}
+
+// ---------------------------------------------------------------------------
+// Persistence monitor (Phase 7b)
+// GET  /persistence/status  → scan + changes list
+// POST /persistence/baseline
+// POST /persistence/approve?path=...
+// ---------------------------------------------------------------------------
+
+export async function analyzePersistence() {
+  const c = await client();
+  const res = await c.get('/persistence/status');
+  // normalize: backend returns { has_baseline, files_watched, changes_detected, changes }
+  const d = res.data;
+  return { findings: d.changes || [], has_baseline: d.has_baseline, files_watched: d.files_watched };
+}
+
+export async function takePersistenceBaseline() {
+  const c = await client();
+  const res = await c.post('/persistence/baseline');
+  return res.data;
+}
+
+export async function approvePersistenceChange(path) {
+  const c = await client();
+  // backend expects path as query param, not body
+  const res = await c.post(`/persistence/approve?path=${encodeURIComponent(path)}`);
+  return res.data;
+}
+
+// ---------------------------------------------------------------------------
+// USB monitor (Phase 7c)
+// GET  /usb/devices     → all devices with trust status
+// GET  /usb/suspicious  → untrusted / risky devices
+// POST /usb/trust?device_id=...  → trust a device
+// (no untrust endpoint — toggle by re-trusting; handled in UI)
+// ---------------------------------------------------------------------------
+
+export async function fetchUSBDevices() {
+  const c = await client();
+  const res = await c.get('/usb/devices');
+  return res.data;  // { count, devices }
+}
+
+export async function analyzeUSB() {
+  const c = await client();
+  const res = await c.get('/usb/suspicious');
+  // normalize: backend returns { count, devices }
+  return { findings: res.data.devices || [] };
+}
+
+export async function trustUSBDevice(deviceId) {
+  const c = await client();
+  // backend expects device_id as query param
+  const res = await c.post(`/usb/trust?device_id=${encodeURIComponent(deviceId)}`);
+  return res.data;
+}
+
+// ---------------------------------------------------------------------------
+// File scanner / FIM (Phase 8)
+// POST /files/scan        → { path }
+// GET  /files/fim/status  → FIM changes
+// POST /files/fim/baseline
+// POST /files/fim/approve?path=...
+// ---------------------------------------------------------------------------
+
+export async function scanFile(path) {
+  const c = await client();
+  const res = await c.post('/files/scan', { path });
+  return res.data;
+}
+
+export async function analyzeFIM() {
+  const c = await client();
+  const res = await c.get('/files/fim/status');
+  const d = res.data;
+  return { findings: d.changes || [], has_baseline: d.has_baseline };
+}
+
+export async function takeFIMBaseline() {
+  const c = await client();
+  const res = await c.post('/files/fim/baseline');
+  return res.data;
+}
+
+export async function approveFIMChange(path) {
+  const c = await client();
+  const res = await c.post(`/files/fim/approve?path=${encodeURIComponent(path)}`);
+  return res.data;
+}
+
+// ---------------------------------------------------------------------------
+// Response / Rules Engine (Phase 9)
+// GET   /response/rules
+// PATCH /response/rules/{name}/enable   (no body)
+// PATCH /response/rules/{name}/disable  (no body)
+// GET   /response/pending
+// POST  /response/pending/{id}/confirm
+// POST  /response/pending/{id}/dismiss
+// ---------------------------------------------------------------------------
+
+export async function fetchRules() {
+  const c = await client();
+  const res = await c.get('/response/rules');
+  return res.data;
+}
+
+export async function setRuleEnabled(ruleId, enabled) {
+  const c = await client();
+  const action = enabled ? 'enable' : 'disable';
+  const res = await c.patch(`/response/rules/${ruleId}/${action}`);
+  return res.data;
+}
+
+export async function fetchPendingActions() {
+  const c = await client();
+  const res = await c.get('/response/pending');
+  return res.data;
+}
+
+export async function confirmPendingAction(actionId) {
+  const c = await client();
+  const res = await c.post(`/response/pending/${actionId}/confirm`);
+  return res.data;
+}
+
+export async function dismissPendingAction(actionId) {
+  const c = await client();
+  const res = await c.post(`/response/pending/${actionId}/dismiss`);
+  return res.data;
+}

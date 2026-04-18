@@ -501,9 +501,13 @@
 
     <!-- Tabs -->
     <div class="tabs">
-        <button class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
-        <button class="tab" data-tab="alerts" onclick="switchTab('alerts')">Alerts</button>
-        <button class="tab" data-tab="detectors" onclick="switchTab('detectors')">Detectors</button>
+        <button class="tab active" data-tab="overview"     onclick="switchTab('overview')">Overview</button>
+        <button class="tab"        data-tab="alerts"       onclick="switchTab('alerts')">Alerts</button>
+        <button class="tab"        data-tab="detectors"    onclick="switchTab('detectors')">Detectors</button>
+        <button class="tab"        data-tab="processes"    onclick="switchTab('processes')">Processes</button>
+        <button class="tab"        data-tab="usb"          onclick="switchTab('usb')">USB</button>
+        <button class="tab"        data-tab="persistence"  onclick="switchTab('persistence')">Persistence</button>
+        <button class="tab"        data-tab="rules"        onclick="switchTab('rules')">Rules</button>
     </div>
 
     <!-- Content -->
@@ -520,6 +524,18 @@
 
         <!-- Detectors Tab -->
         <div id="tab-detectors" style="display: none;"></div>
+
+        <!-- Processes Tab -->
+        <div id="tab-processes" style="display: none;"></div>
+
+        <!-- USB Tab -->
+        <div id="tab-usb" style="display: none;"></div>
+
+        <!-- Persistence Tab -->
+        <div id="tab-persistence" style="display: none;"></div>
+
+        <!-- Rules Tab -->
+        <div id="tab-rules" style="display: none;"></div>
     </main>
 
     <script>
@@ -533,6 +549,13 @@
             loading: false,
             activeTab: "overview",
             alertFilter: "all",
+            processes: [],
+            processFindings: [],
+            usbDevices: [],
+            usbFindings: [],
+            persistenceFindings: [],
+            rules: [],
+            pendingActions: [],
         };
 
         // --- API Calls ---
@@ -589,14 +612,21 @@
 
         // --- Tab switching ---
 
+        const ALL_TABS = ["overview", "alerts", "detectors", "processes", "usb", "persistence", "rules"];
+
         function switchTab(tab) {
             state.activeTab = tab;
             document.querySelectorAll(".tab").forEach(t => {
                 t.classList.toggle("active", t.dataset.tab === tab);
             });
-            document.getElementById("tab-overview").style.display = tab === "overview" ? "block" : "none";
-            document.getElementById("tab-alerts").style.display = tab === "alerts" ? "block" : "none";
-            document.getElementById("tab-detectors").style.display = tab === "detectors" ? "block" : "none";
+            ALL_TABS.forEach(t => {
+                const el = document.getElementById(`tab-${t}`);
+                if (el) el.style.display = (t === tab) ? "block" : "none";
+            });
+            // Lazy-load data when switching to new tabs
+            if (tab === "processes" && state.processes.length === 0) fetchProcesses();
+            if (tab === "usb" && state.usbDevices.length === 0) fetchUSBDevices();
+            if (tab === "rules" && state.rules.length === 0) { fetchRules(); fetchPendingActions(); }
             render();
         }
 
@@ -608,6 +638,10 @@
             renderRecentAlerts();
             renderAllAlerts();
             renderDetectors();
+            renderProcesses();
+            renderUSB();
+            renderPersistence();
+            renderRules();
         }
 
         function renderStats() {
@@ -773,6 +807,330 @@
                         <div><span>c2 beacon detector</span> — FFT-based periodicity analysis for command & control callbacks</div>
                         <div><span>phishing email detector</span> — Multi-signal scoring for phishing email detection</div>
                     </div>
+                </div>
+            `;
+        }
+
+        // --- Processes ---
+
+        async function fetchProcesses() {
+            try {
+                const res = await fetch(`${API_BASE}/processes/all`);
+                const data = await res.json();
+                state.processes = data.processes || [];
+            } catch {}
+            render();
+        }
+
+        async function scanProcesses() {
+            try {
+                const res = await fetch(`${API_BASE}/processes/suspicious`);
+                const data = await res.json();
+                state.processFindings = data.findings || [];
+            } catch { alert("Process scan failed."); }
+            render();
+        }
+
+        async function killProcess(pid, name) {
+            if (!confirm(`Kill process "${name}" (PID ${pid})?`)) return;
+            try {
+                const res = await fetch(`${API_BASE}/processes/kill/${pid}`, { method: "POST" });
+                const data = await res.json();
+                alert(data.success ? `Process "${data.name}" terminated.` : `Failed: ${data.error}`);
+                fetchProcesses();
+            } catch { alert("Kill request failed."); }
+        }
+
+        function renderProcesses() {
+            if (state.activeTab !== "processes") return;
+            const suspicious = state.processes.filter(p => p.suspicious);
+            const top20 = state.processes.slice(0, 20);
+            const findings = state.processFindings;
+
+            document.getElementById("tab-processes").innerHTML = `
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
+                    ${statCard("Total", state.processes.length, "💻", "var(--cyan)", "running processes")}
+                    ${statCard("Suspicious", suspicious.length, "⚠️", "var(--amber)", "name matched")}
+                    ${statCard("Flagged", findings.length, "🔴", "var(--red)", "deep scan results")}
+                </div>
+                <div style="margin-bottom:16px">
+                    <button class="btn-run" onclick="scanProcesses()">🔍 Deep Scan</button>
+                    <button class="btn-run" style="margin-left:8px;background:var(--border)" onclick="fetchProcesses()">↺ Refresh</button>
+                </div>
+                ${findings.length > 0 ? `
+                <div class="card" style="margin-bottom:16px;border-color:rgba(239,68,68,0.3)">
+                    <div class="card-header"><h3 class="card-title" style="color:var(--red)">⚠ Threats Detected</h3></div>
+                    ${findings.map(f => `
+                        <div class="detector-row" style="border-left:3px solid ${f.risk==='critical'?'var(--red)':'var(--amber)'}">
+                            <div>
+                                <span class="sev-badge ${f.risk==='critical'?'high':'medium'}" style="margin-right:8px">${f.risk}</span>
+                                <strong>${f.name}</strong> <span style="color:var(--text-dim);font-size:11px">PID ${f.pid}</span>
+                            </div>
+                            <div style="color:var(--text-dim);font-size:12px;margin-top:4px">${(f.reasons||[]).join(' · ')}</div>
+                            <button onclick="killProcess(${f.pid},'${f.name}')" style="margin-top:6px;background:var(--red-glow);color:var(--red);border:1px solid rgba(239,68,68,0.3);padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px">Kill</button>
+                        </div>
+                    `).join("")}
+                </div>` : ""}
+                <div class="card">
+                    <div class="card-header"><h3 class="card-title">Top Processes by CPU</h3></div>
+                    <div class="detector-header"><div>Name</div><div>PID</div><div>CPU %</div><div>MEM %</div><div>User</div><div></div></div>
+                    ${top20.map(p => `
+                        <div class="detector-row" style="${p.suspicious ? 'background:rgba(245,158,11,0.05);border-left:2px solid var(--amber)' : ''}">
+                            <div style="font-family:var(--mono);font-size:12px">${p.suspicious ? '⚠ ' : ''}${p.name}</div>
+                            <div style="color:var(--text-dim);font-size:11px">${p.pid}</div>
+                            <div style="color:${p.cpu_percent>50?'var(--red)':p.cpu_percent>20?'var(--amber)':'var(--text)'}">${p.cpu_percent}%</div>
+                            <div style="color:var(--text-dim)">${p.memory_percent}%</div>
+                            <div style="color:var(--text-dim);font-size:11px">${p.username}</div>
+                            <div>${p.suspicious ? `<button onclick="killProcess(${p.pid},'${p.name}')" style="background:var(--red-glow);color:var(--red);border:1px solid rgba(239,68,68,0.3);padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px">Kill</button>` : ''}</div>
+                        </div>
+                    `).join("")}
+                </div>
+            `;
+        }
+
+        // --- USB ---
+
+        async function fetchUSBDevices() {
+            try {
+                const res = await fetch(`${API_BASE}/usb/devices`);
+                const data = await res.json();
+                state.usbDevices = data.devices || [];
+            } catch {}
+            render();
+        }
+
+        async function scanUSB() {
+            try {
+                const res = await fetch(`${API_BASE}/usb/suspicious`);
+                const data = await res.json();
+                state.usbFindings = data.devices || [];
+            } catch { alert("USB scan failed."); }
+            render();
+        }
+
+        async function trustUSB(deviceId) {
+            try {
+                await fetch(`${API_BASE}/usb/trust?device_id=${encodeURIComponent(deviceId)}`, { method: "POST" });
+                fetchUSBDevices();
+            } catch { alert("Trust update failed."); }
+        }
+
+        function renderUSB() {
+            if (state.activeTab !== "usb") return;
+            const trusted = state.usbDevices.filter(d => d.trusted);
+            const unknown = state.usbDevices.filter(d => !d.trusted);
+
+            document.getElementById("tab-usb").innerHTML = `
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
+                    ${statCard("Connected", state.usbDevices.length, "🔌", "var(--cyan)", "USB devices")}
+                    ${statCard("Trusted", trusted.length, "✅", "var(--green)", "approved")}
+                    ${statCard("Unknown", unknown.length, "❓", "var(--amber)", "not yet trusted")}
+                </div>
+                <div style="margin-bottom:16px">
+                    <button class="btn-run" onclick="scanUSB()">🔌 Scan USB</button>
+                    <button class="btn-run" style="margin-left:8px;background:var(--border)" onclick="fetchUSBDevices()">↺ Refresh</button>
+                </div>
+                ${state.usbFindings.length > 0 ? `
+                <div class="card" style="margin-bottom:16px;border-color:rgba(239,68,68,0.3)">
+                    <div class="card-header"><h3 class="card-title" style="color:var(--red)">⚠ USB Threats</h3></div>
+                    ${state.usbFindings.map(f => `
+                        <div class="detector-row">
+                            <strong>${f.product_name || f.vendor || 'Unknown device'}</strong>
+                            <span class="sev-badge ${f.risk}" style="margin-left:8px">${f.risk}</span>
+                            <div style="color:var(--text-dim);font-size:12px;margin-top:4px">${(f.reasons||[]).join(' · ')}</div>
+                        </div>
+                    `).join("")}
+                </div>` : ""}
+                <div class="card">
+                    <div class="card-header"><h3 class="card-title">Connected Devices</h3></div>
+                    ${state.usbDevices.length === 0
+                        ? '<div class="empty-state">No USB devices detected.</div>'
+                        : state.usbDevices.map((d, i) => `
+                            <div class="detector-row" style="${!d.trusted ? 'border-left:2px solid var(--amber)' : ''}">
+                                <div style="flex:1">
+                                    <div style="font-weight:600">${d.product_name || d.vendor || 'Unknown'}</div>
+                                    <div style="color:var(--text-dim);font-size:11px">${d.vendor ? 'Vendor: '+d.vendor : ''} ${d.serial ? '· Serial: '+d.serial : ''}</div>
+                                </div>
+                                <button onclick="trustUSB('${d.device_id || d.vendor_id || i}')"
+                                    style="border:1px solid ${d.trusted?'var(--green)':'var(--border)'};background:${d.trusted?'rgba(16,185,129,0.1)':'transparent'};color:${d.trusted?'var(--green)':'var(--text-dim)'};padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px">
+                                    ${d.trusted ? '✓ Trusted' : 'Trust'}
+                                </button>
+                            </div>
+                        `).join("")
+                    }
+                </div>
+            `;
+        }
+
+        // --- Persistence ---
+
+        async function scanPersistence() {
+            try {
+                const res = await fetch(`${API_BASE}/persistence/status`);
+                const data = await res.json();
+                state.persistenceFindings = data.changes || [];
+            } catch { alert("Persistence scan failed."); }
+            render();
+        }
+
+        async function takeBaseline() {
+            if (!confirm("Take persistence baseline? Only do this on a clean system.")) return;
+            try {
+                await fetch(`${API_BASE}/persistence/baseline`, { method: "POST" });
+                alert("Baseline recorded.");
+                state.persistenceFindings = [];
+            } catch { alert("Baseline failed."); }
+            render();
+        }
+
+        async function approveChange(path) {
+            try {
+                await fetch(`${API_BASE}/persistence/approve?path=${encodeURIComponent(path)}`, {
+                    method: "POST",
+                });
+                state.persistenceFindings = state.persistenceFindings.filter(f => f.path !== path);
+            } catch { alert("Approve failed."); }
+            render();
+        }
+
+        function renderPersistence() {
+            if (state.activeTab !== "persistence") return;
+            const RISK_COLOR = { critical: "var(--red)", high: "var(--amber)", medium: "var(--amber)", low: "var(--cyan)" };
+
+            document.getElementById("tab-persistence").innerHTML = `
+                <div class="card" style="margin-bottom:16px">
+                    <p style="color:var(--text-dim);font-size:13px;margin-bottom:16px">
+                        Monitors LaunchAgents, /etc/hosts, authorized_keys, shell configs, and sudoers for unauthorized changes.
+                    </p>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn-run" onclick="scanPersistence()">🔍 Scan</button>
+                        <button class="btn-run" style="background:var(--border)" onclick="takeBaseline()">📸 Take Baseline</button>
+                    </div>
+                </div>
+                ${state.persistenceFindings.length === 0
+                    ? '<div class="card"><div class="empty-state">No persistence changes detected. Run a scan to check.</div></div>'
+                    : state.persistenceFindings.map(f => `
+                        <div class="card" style="margin-bottom:12px;border-left:3px solid ${RISK_COLOR[f.risk]||'var(--border)'}">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                                <span class="sev-badge ${f.risk==='critical'?'high':'medium'}">${f.risk}</span>
+                                <code style="font-size:12px;color:var(--cyan)">${f.path}</code>
+                            </div>
+                            <div style="color:var(--text-dim);font-size:12px">${f.change_type || ''}: ${f.details || f.description || ''}</div>
+                            ${f.timestamp ? `<div style="color:var(--text-muted);font-size:11px;margin-top:4px">${new Date(f.timestamp).toLocaleString()}</div>` : ''}
+                            <button onclick="approveChange('${f.path.replace(/'/g, "\\'")}')"
+                                style="margin-top:8px;border:1px solid var(--green);background:rgba(16,185,129,0.08);color:var(--green);padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px">
+                                ✓ Approve Change
+                            </button>
+                        </div>
+                    `).join("")
+                }
+            `;
+        }
+
+        // --- Rules Engine ---
+
+        async function fetchRules() {
+            try {
+                const res = await fetch(`${API_BASE}/response/rules`);
+                const data = await res.json();
+                state.rules = data.rules || [];
+            } catch {}
+            render();
+        }
+
+        async function fetchPendingActions() {
+            try {
+                const res = await fetch(`${API_BASE}/response/pending`);
+                const data = await res.json();
+                state.pendingActions = data.pending || [];
+            } catch {}
+            render();
+        }
+
+        async function toggleRule(ruleId, currentEnabled) {
+            try {
+                const action = currentEnabled ? "disable" : "enable";
+                await fetch(`${API_BASE}/response/rules/${ruleId}/${action}`, { method: "PATCH" });
+                state.rules = state.rules.map(r => r.id === ruleId ? {...r, enabled: !currentEnabled} : r);
+            } catch { alert("Failed to toggle rule."); }
+            render();
+        }
+
+        async function confirmAction(actionId) {
+            try {
+                await fetch(`${API_BASE}/response/pending/${actionId}/confirm`, { method: "POST" });
+                state.pendingActions = state.pendingActions.filter(p => p.id !== actionId);
+            } catch { alert("Confirm failed."); }
+            render();
+        }
+
+        async function dismissAction(actionId) {
+            try {
+                await fetch(`${API_BASE}/response/pending/${actionId}/dismiss`, { method: "POST" });
+                state.pendingActions = state.pendingActions.filter(p => p.id !== actionId);
+            } catch { alert("Dismiss failed."); }
+            render();
+        }
+
+        function renderRules() {
+            if (state.activeTab !== "rules") return;
+            const enabled = state.rules.filter(r => r.enabled).length;
+
+            document.getElementById("tab-rules").innerHTML = `
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
+                    ${statCard("Total Rules", state.rules.length, "📋", "var(--cyan)", "configured")}
+                    ${statCard("Active", enabled, "✅", "var(--green)", "rules enabled")}
+                    ${statCard("Pending", state.pendingActions.length, "⏳", "var(--amber)", "awaiting confirmation")}
+                </div>
+
+                ${state.pendingActions.length > 0 ? `
+                <div class="card" style="margin-bottom:16px;border-color:rgba(245,158,11,0.3)">
+                    <div class="card-header"><h3 class="card-title" style="color:var(--amber)">⏳ Pending Actions</h3></div>
+                    ${state.pendingActions.map(p => `
+                        <div class="detector-row">
+                            <div style="flex:1">
+                                <strong style="text-transform:uppercase;letter-spacing:0.05em">${(p.action_type||'').replace(/_/g,' ')}</strong>
+                                <div style="color:var(--text-dim);font-size:12px;margin-top:2px">Rule: ${p.rule_name||p.rule_id}</div>
+                                ${p.target ? `<div style="font-family:var(--mono);font-size:11px;color:var(--cyan);margin-top:2px">${p.target}</div>` : ''}
+                                ${p.created_at ? `<div style="color:var(--text-muted);font-size:11px;margin-top:2px">${new Date(p.created_at).toLocaleString()}</div>` : ''}
+                            </div>
+                            <div style="display:flex;gap:8px;margin-left:16px">
+                                <button onclick="confirmAction('${p.id}')"
+                                    style="background:var(--green-glow);color:var(--green);border:1px solid rgba(16,185,129,0.3);padding:5px 14px;border-radius:4px;cursor:pointer;font-size:12px">
+                                    Confirm
+                                </button>
+                                <button onclick="dismissAction('${p.id}')"
+                                    style="background:var(--red-glow);color:var(--red);border:1px solid rgba(239,68,68,0.3);padding:5px 14px;border-radius:4px;cursor:pointer;font-size:12px">
+                                    Dismiss
+                                </button>
+                            </div>
+                        </div>
+                    `).join("")}
+                </div>` : ""}
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Response Rules</h3>
+                        <button class="btn-link" onclick="fetchRules();fetchPendingActions()">↺ Refresh</button>
+                    </div>
+                    <div class="detector-header"><div>Rule</div><div>Description</div><div>Actions</div><div>Status</div></div>
+                    ${state.rules.length === 0
+                        ? '<div class="empty-state">No rules loaded. Check server configuration.</div>'
+                        : state.rules.map(r => `
+                            <div class="detector-row">
+                                <div style="font-weight:600;font-size:13px">${r.name||r.id}</div>
+                                <div style="color:var(--text-dim);font-size:12px">${r.description||''}</div>
+                                <div style="color:var(--text-dim);font-size:11px;font-family:var(--mono)">${(r.actions||[]).join(', ')}</div>
+                                <div>
+                                    <button onclick="toggleRule('${r.id}', ${r.enabled})"
+                                        style="border:1px solid ${r.enabled?'var(--green)':'var(--border)'};background:${r.enabled?'rgba(16,185,129,0.1)':'transparent'};color:${r.enabled?'var(--green)':'var(--text-dim)'};padding:4px 14px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600">
+                                        ${r.enabled ? 'ON' : 'OFF'}
+                                    </button>
+                                    ${r.requires_confirmation ? '<span style="color:var(--amber);font-size:10px;margin-left:6px">requires confirm</span>' : ''}
+                                </div>
+                            </div>
+                        `).join("")
+                    }
                 </div>
             `;
         }

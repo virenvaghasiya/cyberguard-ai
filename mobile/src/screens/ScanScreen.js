@@ -6,9 +6,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius, typography } from '../theme';
 import FindingCard from '../components/FindingCard';
-import { scanLog, scanVulnerability, scanDemoEmails } from '../services/api';
+import { scanLog, scanVulnerability, scanDemoEmails, scanSignature, scanFile } from '../services/api';
 
-const TABS = ['Email', 'Log', 'Vuln'];
+const TABS = ['Email', 'Log', 'Vuln', 'Sig', 'File'];
 
 export default function ScanScreen() {
   const [tab, setTab] = useState('Email');
@@ -29,6 +29,8 @@ export default function ScanScreen() {
       {tab === 'Email' && <EmailTab />}
       {tab === 'Log'   && <LogTab />}
       {tab === 'Vuln'  && <VulnTab />}
+      {tab === 'Sig'   && <SigTab />}
+      {tab === 'File'  && <FileTab />}
     </SafeAreaView>
   );
 }
@@ -244,6 +246,169 @@ function VulnTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Signature scanner tab
+// ---------------------------------------------------------------------------
+function SigTab() {
+  const [text, setText]       = useState('');
+  const [running, setRunning] = useState(false);
+  const [result, setResult]   = useState(null);
+  const [error, setError]     = useState(null);
+
+  const run = async () => {
+    if (!text.trim()) return;
+    setRunning(true); setError(null); setResult(null);
+    try {
+      const r = await scanSignature(text);
+      setResult(r);
+    } catch { setError('Signature scan failed.'); }
+    finally  { setRunning(false); }
+  };
+
+  const RISK_COLOR = { critical: '#ff3b30', high: '#ff9500', medium: '#ffcc00', low: '#34c759' };
+
+  return (
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView style={styles.scroll}>
+        <Text style={styles.desc}>Detect SQLi, XSS, RCE, C2, web shells, and 200+ other attack patterns in any text.</Text>
+
+        <TextInput
+          style={styles.textInput}
+          multiline
+          numberOfLines={8}
+          placeholder="Paste request payload, log line, or any text..."
+          placeholderTextColor={colors.textMuted}
+          value={text}
+          onChangeText={setText}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+
+        <TouchableOpacity style={[styles.btn, !text.trim() && styles.btnDisabled]} onPress={run} disabled={running || !text.trim()}>
+          {running ? <ActivityIndicator color={colors.background} /> : <Text style={styles.btnText}>🧬  Run Signature Scan</Text>}
+        </TouchableOpacity>
+
+        {error && <Text style={styles.error}>{error}</Text>}
+
+        {result && (
+          <>
+            <View style={styles.summaryRow}>
+              <SummaryPill label="Matches"  value={result.total_matches || result.matches?.length || 0} color={colors.primary} />
+              <SummaryPill label="Critical" value={(result.matches || []).filter(m => m.severity === 'critical').length} color={colors.critical} />
+              <SummaryPill label="High"     value={(result.matches || []).filter(m => m.severity === 'high').length}     color={colors.high} />
+            </View>
+            {(result.matches || []).length === 0 && (
+              <Text style={styles.clean}>✅  No attack signatures detected.</Text>
+            )}
+            {(result.matches || []).map((m, i) => (
+              <View key={i} style={[styles.sigCard, { borderLeftColor: RISK_COLOR[m.severity] || colors.border }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary, flex: 1 }}>{m.rule_name || m.pattern_name}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: RISK_COLOR[m.severity] || colors.textMuted }}>
+                    {m.severity?.toUpperCase()}
+                  </Text>
+                </View>
+                {m.category && <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Category: {m.category}</Text>}
+                {m.match && (
+                  <Text style={{ fontSize: 11, color: colors.textSecondary, fontFamily: 'monospace', marginTop: 4 }} numberOfLines={2}>
+                    {m.match}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </>
+        )}
+        <View style={{ height: spacing.xl }} />
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// File scanner tab
+// ---------------------------------------------------------------------------
+function FileTab() {
+  const [path, setPath]       = useState('');
+  const [running, setRunning] = useState(false);
+  const [result, setResult]   = useState(null);
+  const [error, setError]     = useState(null);
+
+  const run = async () => {
+    if (!path.trim()) return;
+    setRunning(true); setError(null); setResult(null);
+    try {
+      const r = await scanFile(path.trim());
+      setResult(r);
+    } catch { setError('File scan failed. Check the path and server connection.'); }
+    finally  { setRunning(false); }
+  };
+
+  const VERDICT_COLOR = { clean: colors.success, suspicious: colors.warning, malicious: colors.critical };
+
+  return (
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView style={styles.scroll}>
+        <Text style={styles.desc}>Scan a file for malware hash matches, static analysis patterns, and VirusTotal detections.</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="/path/to/file or ~/Downloads/suspicious.sh"
+          placeholderTextColor={colors.textMuted}
+          value={path}
+          onChangeText={setPath}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+
+        <TouchableOpacity style={[styles.btn, !path.trim() && styles.btnDisabled]} onPress={run} disabled={running || !path.trim()}>
+          {running ? <ActivityIndicator color={colors.background} /> : <Text style={styles.btnText}>📁  Scan File</Text>}
+        </TouchableOpacity>
+
+        {error && <Text style={styles.error}>{error}</Text>}
+
+        {result && (
+          <>
+            <View style={[styles.verdictBanner, { backgroundColor: (VERDICT_COLOR[result.verdict] || colors.info) + '22' }]}>
+              <Text style={[styles.verdictLabel, { color: VERDICT_COLOR[result.verdict] || colors.info }]}>
+                {result.verdict?.toUpperCase() || 'UNKNOWN'}
+              </Text>
+              <Text style={styles.verdictPath} numberOfLines={1}>{result.path || path}</Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <SummaryPill label="VT Hits"  value={result.vt_positives ?? '—'}      color={result.vt_positives > 0 ? colors.critical : colors.success} />
+              <SummaryPill label="Patterns" value={result.static_matches?.length || 0} color={colors.warning} />
+              <SummaryPill label="Hash DB"  value={result.hash_match ? 'HIT' : 'OK'} color={result.hash_match ? colors.critical : colors.success} />
+            </View>
+
+            {(result.static_matches || []).map((m, i) => (
+              <View key={i} style={styles.sigCard}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>{m.pattern}</Text>
+                {m.line_number && <Text style={{ fontSize: 11, color: colors.textMuted }}>Line {m.line_number}</Text>}
+                {m.context && (
+                  <Text style={{ fontSize: 11, fontFamily: 'monospace', color: colors.textSecondary, marginTop: 2 }} numberOfLines={2}>
+                    {m.context}
+                  </Text>
+                )}
+              </View>
+            ))}
+
+            {result.vt_report && (
+              <View style={styles.sigCard}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>VirusTotal</Text>
+                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
+                  {result.vt_positives} / {result.vt_total} engines detected
+                </Text>
+              </View>
+            )}
+          </>
+        )}
+        <View style={{ height: spacing.xl }} />
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Shared sub-components
 // ---------------------------------------------------------------------------
 function SummaryPill({ label, value, color }) {
@@ -295,4 +460,8 @@ const styles = StyleSheet.create({
   scoreBar: { flex: 1, height: 6, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden', marginHorizontal: spacing.sm },
   scoreFill: { height: '100%', borderRadius: 3 },
   scoreValue: { fontSize: 11, color: colors.textPrimary, width: 32, textAlign: 'right' },
+  sigCard: { backgroundColor: colors.card, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm, borderLeftWidth: 3, borderLeftColor: colors.border },
+  verdictBanner: { borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md, alignItems: 'center' },
+  verdictLabel: { fontSize: 22, fontWeight: '800', marginBottom: 4 },
+  verdictPath: { fontSize: 11, color: colors.textMuted },
 });

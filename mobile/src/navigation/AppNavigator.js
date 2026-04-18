@@ -7,6 +7,7 @@ import DashboardScreen   from '../screens/DashboardScreen';
 import AlertsScreen      from '../screens/AlertsScreen';
 import NetworkScreen     from '../screens/NetworkScreen';
 import ScanScreen        from '../screens/ScanScreen';
+import SystemScreen      from '../screens/SystemScreen';
 import SettingsScreen    from '../screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
@@ -16,6 +17,7 @@ const ICONS = {
   Alerts:    '🔔',
   Network:   '🌐',
   Scan:      '🔍',
+  System:    '🖥️',
   Settings:  '⚙️',
 };
 
@@ -43,6 +45,7 @@ export default function AppNavigator() {
       <Tab.Screen name="Alerts"    component={AlertsScreen} />
       <Tab.Screen name="Network"   component={NetworkScreen} />
       <Tab.Screen name="Scan"      component={ScanScreen} />
+      <Tab.Screen name="System"    component={SystemScreen} />
       <Tab.Screen name="Settings"  component={SettingsScreen} />
     </Tab.Navigator>
   );
