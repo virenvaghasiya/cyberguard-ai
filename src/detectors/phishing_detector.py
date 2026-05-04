@@ -226,6 +226,12 @@ class PhishingEmailDetector(BaseDetector):
         if features.sender_domain_mismatch and features.urgency_score > 0:
             score += 3.0  # Brand impersonation + urgency = very likely phishing
 
+        if features.dangerous_attachment and features.urgency_score > 0:
+            score += 3.0  # Dangerous attachment + urgency = very likely phishing
+
+        if features.dangerous_attachment and features.threat_score > 0:
+            score += 2.0  # Dangerous attachment + threat language = very likely phishing
+
         return score
 
     def _score_to_severity(self, score: float) -> Severity:
