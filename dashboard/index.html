@@ -1135,12 +1135,41 @@
             `;
         }
 
+        // --- WebSocket for real-time alerts ---
+
+        let ws = null;
+
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket("ws://localhost:8000/ws/alerts");
+                ws.onmessage = function(event) {
+                    const alert = JSON.parse(event.data);
+                    state.events.push(alert);
+                    if (state.events.length > 500) state.events = state.events.slice(-500);
+                    render();
+                    document.querySelector('.header').style.borderBottom = '2px solid var(--cyan)';
+                    setTimeout(() => {
+                        document.querySelector('.header').style.borderBottom = '1px solid var(--border)';
+                    }, 1000);
+                };
+                ws.onclose = function() {
+                    setTimeout(connectWebSocket, 3000);
+                };
+                ws.onerror = function() {
+                    ws.close();
+                };
+            } catch(e) {
+                setTimeout(connectWebSocket, 3000);
+            }
+        }
+
         // --- Init ---
 
         fetchHealth();
         fetchEvents();
         render();
-        setInterval(() => { fetchHealth(); fetchEvents(); }, 10000);
+        connectWebSocket();
+        setInterval(() => { fetchHealth(); }, 30000);
     </script>
 </body>
 </html>

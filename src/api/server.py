@@ -1144,3 +1144,34 @@ def start_server():
 
 if __name__ == "__main__":
     start_server()
+
+
+# --- WebSocket for real-time alerts ---
+from fastapi import WebSocket, WebSocketDisconnect
+
+connected_clients: list[WebSocket] = []
+
+
+@app.websocket("/ws/alerts")
+async def websocket_alerts(websocket: WebSocket):
+    """Real-time alert stream via WebSocket."""
+    await websocket.accept()
+    connected_clients.append(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        connected_clients.remove(websocket)
+
+
+async def broadcast_alert(event):
+    """Send alert to all connected WebSocket clients."""
+    data = event.to_dict()
+    disconnected = []
+    for client in connected_clients:
+        try:
+            await client.send_json(data)
+        except Exception:
+            disconnected.append(client)
+    for client in disconnected:
+        connected_clients.remove(client)
