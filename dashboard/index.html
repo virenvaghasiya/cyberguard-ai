@@ -595,7 +595,21 @@
             render();
 
             try {
-                const res = await fetch(`${API_BASE}/network/status`);
+                // Run multiple scans in parallel for a full picture
+                const [networkRes, logsRes, statsRes] = await Promise.all([
+                    fetch(`${API_BASE}/network/status`),
+                    fetch(`${API_BASE}/scan/system-logs?hours=1`),
+                    fetch(`${API_BASE}/stats/summary`),
+                ]);
+                const network = await networkRes.json();
+                const logs = await logsRes.json();
+                const stats = await statsRes.json();
+                const res = {
+                    total_flows: network.detector?.events_processed || 0,
+                    anomalies_detected: (network.detector?.anomalies_detected || 0) + (logs.anomalies_found || 0),
+                    anomaly_rate: logs.anomaly_rate || 0,
+                    _raw: { network, logs, stats }
+                };
                 state.analysisResult = await res.json();
                 await fetchEvents();
                 document.getElementById("lastScan").textContent = `Last scan: ${new Date().toLocaleTimeString()}`;
