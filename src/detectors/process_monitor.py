@@ -116,8 +116,26 @@ def _assess_process(
     name = (proc_info.get("name") or "").lower()
     cmdline = " ".join(proc_info.get("cmdline") or []).lower()
 
-    # 1. Known malware name — critical
-    matched_name = next((m for m in MALWARE_NAMES if m in name or m in cmdline), None)
+    # 1. Known malware name — critical (whole-word match only)
+    import re as _re
+    # Safe system process whitelist
+    SAFE_PROCESSES = {
+        "launchd", "launchservicesd", "launchagentd", "kernelmanagerd",
+        "notifyd", "configd", "diskarbitrationd", "distnoted", "nsurlsessiond",
+        "lsd", "mds", "mdworker", "mdflagwriter", "mdwrite", "fseventsd",
+        "securityd", "trustd", "syspolicyd", "amfid", "endpointsecurityd",
+        "coreaudiod", "audiomxd", "bluetoothd", "wifid", "airportd",
+        "locationd", "coreduetd", "mediaanalysisd", "photolibraryd",
+    }
+    if name not in SAFE_PROCESSES:
+        matched_name = next(
+            (m for m in MALWARE_NAMES
+             if _re.search(rf"\b{_re.escape(m)}\b", name)
+             or _re.search(rf"\b{_re.escape(m)}\b", cmdline)),
+            None
+        )
+    else:
+        matched_name = None
     if matched_name:
         risk = "critical"
         attack_type = "known_malware_tool"

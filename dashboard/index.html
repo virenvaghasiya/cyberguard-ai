@@ -610,7 +610,7 @@
                     anomaly_rate: logs.anomaly_rate || 0,
                     _raw: { network, logs, stats }
                 };
-                state.analysisResult = await res.json();
+                state.analysisResult = res;
                 await fetchEvents();
                 document.getElementById("lastScan").textContent = `Last scan: ${new Date().toLocaleTimeString()}`;
             } catch (e) {
