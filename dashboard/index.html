@@ -595,7 +595,7 @@
             render();
 
             try {
-                const res = await fetch(`${API_BASE}/analyze/demo`, { method: "POST" });
+                const res = await fetch(`${API_BASE}/network/status`);
                 state.analysisResult = await res.json();
                 await fetchEvents();
                 document.getElementById("lastScan").textContent = `Last scan: ${new Date().toLocaleTimeString()}`;
@@ -680,19 +680,22 @@
             if (!state.analysisResult) { card.style.display = "none"; return; }
             card.style.display = "block";
             const r = state.analysisResult;
+            const totalFlows = r.total_flows || r.totalFlows || 0;
+            const anomalies = r.anomalies_detected || r.anomaliesDetected || 0;
+            const rate = r.anomaly_rate || r.anomalyRate || 0;
             card.innerHTML = `
                 <div class="card-header"><h3 class="card-title">Latest Analysis Results</h3></div>
                 <div class="analysis-grid">
                     <div>
-                        <div class="analysis-value">${r.total_flows.toLocaleString()}</div>
+                        <div class="analysis-value">${totalFlows.toLocaleString()}</div>
                         <div class="analysis-label">Flows Analyzed</div>
                     </div>
                     <div>
-                        <div class="analysis-value" style="color: var(--red);">${r.anomalies_detected}</div>
+                        <div class="analysis-value" style="color: var(--red);">${anomalies}</div>
                         <div class="analysis-label">Anomalies Detected</div>
                     </div>
                     <div>
-                        <div class="analysis-value" style="color: var(--amber);">${(r.anomaly_rate * 100).toFixed(1)}%</div>
+                        <div class="analysis-value" style="color: var(--amber);">${(rate * 100).toFixed(1)}%</div>
                         <div class="analysis-label">Anomaly Rate</div>
                     </div>
                 </div>
